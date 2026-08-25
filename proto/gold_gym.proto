@@ -1,0 +1,105 @@
+syntax = "proto3";
+
+option go_package = "gold-gym-be/proto";
+
+package goldgym;
+
+// GoldGymService provides operations for Gold Gym user management
+service GoldGymService {
+  // GetGoldUser retrieves all gold gym users
+  rpc GetGoldUser(GetGoldUserRequest) returns (GetGoldUserResponse);
+
+  // GetGoldUserByEmail retrieves a single user by email
+  rpc GetGoldUserByEmail(GetGoldUserByEmailRequest) returns (GetGoldUserByEmailResponse);
+
+  // LoginUser authenticates a user and returns token
+  rpc LoginUser(LoginUserRequest) returns (LoginUserResponse);
+
+  // InsertGoldUser creates a new user
+  rpc InsertGoldUser(InsertGoldUserRequest) returns (InsertGoldUserResponse);
+
+  // GetAllSubscription retrieves all available subscriptions
+  rpc GetAllSubscription(GetAllSubscriptionRequest) returns (GetAllSubscriptionResponse);
+}
+
+// GetGoldUserRequest is the request message for GetGoldUser RPC
+message GetGoldUserRequest {}
+
+// GetGoldUserByEmailRequest is the request message for GetGoldUserByEmail RPC
+message GetGoldUserByEmailRequest {
+  string email = 1;
+}
+
+// GoldUser represents a gold gym user entity
+message GoldUser {
+  int32  gold_id                = 1;
+  string gold_email             = 2;
+  string gold_password          = 3;
+  string gold_nama              = 4;
+  string gold_nomorhp           = 5;
+  string gold_nomorkartu        = 6;
+  string gold_cvv               = 7;
+  string gold_expireddate       = 8;
+  string gold_namapemegangkartu = 9;
+}
+
+// GetGoldUserResponse is the response message for GetGoldUser RPC
+message GetGoldUserResponse {
+  repeated GoldUser users = 1;
+}
+
+// GetGoldUserByEmailResponse is the response message for GetGoldUserByEmail RPC
+message GetGoldUserByEmailResponse {
+  GoldUser user = 1;
+}
+
+// LoginUserRequest is the request message for LoginUser RPC
+message LoginUserRequest {
+  string email = 1;
+  string password = 2;
+}
+
+// LoginUserResponse is the response message for LoginUser RPC
+message LoginUserResponse {
+  string token = 1;
+  string user_id = 2;
+  string user_email = 3;
+  string user_name = 4;
+}
+
+// InsertGoldUserRequest is the request message for InsertGoldUser RPC
+message InsertGoldUserRequest {
+  string gold_email = 1;
+  string gold_password = 2;
+  string gold_nama = 3;
+  string gold_nomorhp = 4;
+  string gold_nomorkartu = 5;
+  string gold_cvv = 6;
+  string gold_expireddate = 7;
+  string gold_namapemegangkartu = 8;
+}
+
+// InsertGoldUserResponse is the response message for InsertGoldUser RPC
+message InsertGoldUserResponse {
+  string user_id = 1;
+  string message = 2;
+}
+
+// GetAllSubscriptionRequest is the request message for GetAllSubscription RPC
+message GetAllSubscriptionRequest {}
+
+// Subscription represents a subscription plan
+message Subscription {
+  string gold_namapaket = 1;
+  string gold_namalayanan = 2;
+  double gold_harga = 3;
+  string gold_jadwal = 4;
+  string gold_listlatihan = 5;
+  int32 gold_jumlahpertemuan = 6;
+  int32 gold_durasi = 7;
+}
+
+// GetAllSubscriptionResponse is the response message for GetAllSubscription RPC
+message GetAllSubscriptionResponse {
+  repeated Subscription subscriptions = 1;
+}

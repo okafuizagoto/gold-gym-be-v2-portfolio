@@ -1,0 +1,39 @@
+server:
+  port: "8080"
+  grpc_port: "50051"
+  env: "production"
+database:
+  # master: "CHANGE_ME:CHANGE_ME@mysql+tcp(localhost:3306)/butuhdok_gold_gym_be"
+  # migrasi 2026-08-14: production pindah ke MariaDB self-hosted di VPS
+  # (jaringan internal docker "kind", tidak diekspos publik). Skema diimpor
+  # bersih dari Hostinger production (0 baris, belum ada user asli).
+  # DSN lama (Hostinger): "CHANGE_ME:CHANGE_ME@tcp(srv1155.hstgr.io:3306)/u868654674_gold_gym_bezpr"
+  master: "CHANGE_ME:CHANGE_ME@tcp(gold-gym-mysql:3306)/gold_gym_be"
+  production: "CHANGE_ME:CHANGE_ME@tcp(gold-gym-mysql:3306)/gold_gym_be"
+  # firebase:
+  #   fcmProjectIDB2BPelapak: "gofirebase"
+api:
+  auth: "http://auth.staging/auth"
+swagger:
+  host: "localhost:8080"
+  schemes:
+    - http
+redis:
+  host: "redis:6379"
+  password: "CHANGE_ME"
+  db: 1
+firebase:
+  projectID: "gofirebase"
+  databaseURL: "https://gofirebase-default-rtdb.asia-southeast1.firebasedatabase.app/"
+  storageBucket: "gofirebase.appspot.com" # optional but recommended if you use Firebase Storage
+discord:
+  webhook: "https://discordapp.com/api/webhooks/CHANGE_ME/CHANGE_ME"
+kafka:
+  brokers:
+    - "kafka:29092"
+  group_id: "goldgym-sync-group" # tetap
+  topics:
+    local_to_prod: "mysql_server.u868654674_gold_gym_bez.data_peserta"
+    prod_to_local: "mysql_server.u868654674_gold_gym_bez.data_peserta"
+    http_insert: "goldgym.http.insert_user"
+    sales: "goldgym.http.sales"

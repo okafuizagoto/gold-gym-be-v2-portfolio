@@ -1,0 +1,28 @@
+basePath: /example
+info:
+  contact: {}
+  description: Example API
+  title: Example API
+  version: "1.0"
+paths:
+  /v1/profiles:
+    get:
+      consumes:
+      - application/json
+      description: Get entries of all goldgyms
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+      security:
+      - BearerAuth: []
+      summary: Get entries of all goldgyms
+      tags:
+      - gold-gym-be
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

@@ -1,0 +1,41 @@
+server:
+  port: "8085"
+  grpc_port: "50051"
+  env: "local"
+database:
+  # master: "CHANGE_ME:CHANGE_ME@mysql+tcp(localhost:3306)/butuhdok_gold_gym_be"
+  # master: "user:admin@tcp(mysql:3306)/u868654674_gold_gym_bez"
+  master: "CHANGE_ME:CHANGE_ME@tcp(srv1155.hstgr.io:3306)/u868654674_gold_gym_bez"
+  production: "CHANGE_ME:CHANGE_ME@tcp(srv1155.hstgr.io:3306)/u868654674_gold_gym_bez"
+  # firebase:
+  #   fcmProjectIDB2BPelapak: "gofirebase"
+api:
+  auth: "http://auth.staging/auth"
+swagger:
+  host: "localhost:8080"
+  schemes:
+    - http
+redis:
+  host: "localhost:6379"
+  password: ""
+firebase:
+  projectID: "gofirebase"
+  databaseURL: "https://gofirebase-default-rtdb.asia-southeast1.firebasedatabase.app/"
+  storageBucket: "gofirebase.appspot.com" # optional but recommended if you use Firebase Storage
+kafka:
+  brokers:
+    - "localhost:29092"
+  group_id: "goldgym-sync-group"
+  topics:
+    local_to_prod: "mysql_server.u868654674_gold_gym_bez.data_peserta"
+    prod_to_local: "mysql_server.u868654674_gold_gym_bez.data_peserta"
+    http_insert: "goldgym.http.insert_user"
+    sales: "goldgym.http.sales"
+elasticsearch:
+  addresses:
+    - "http://localhost:9200"
+  username: ""
+  password: ""
+mongodb:
+  uri: "mongodb://localhost:27017"
+  database: "gold_gym_be"

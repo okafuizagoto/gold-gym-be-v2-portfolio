@@ -1,0 +1,56 @@
+
+#   apiVersion: batch/v1
+#   kind: CronJob
+#   metadata:
+#     name: gold-gym-be-v2-masterproduct-cron
+#     namespace: production
+#     annotations:
+#       helm.sh/resource-policy: keep
+#   spec:
+#     timeZone: "Asia/Jakarta"
+#     schedule: "00 19 * * *"             # setiap hari 19:00 WIB
+#     concurrencyPolicy: Forbid           # tidak start job baru jika lama masih jalan
+#     successfulJobsHistoryLimit: 1
+#     failedJobsHistoryLimit: 3
+#     jobTemplate:
+#       spec:
+#         template:
+#           metadata:
+#             annotations:
+#               # Vault Agent Injector annotations (sama pattern deployment.yaml)
+#               # vault.hashicorp.com/agent-inject: "true"
+#               # vault.hashicorp.com/role: <vault-role-crons>
+#               # vault.hashicorp.com/agent-pre-populate-only: "true"
+#               # vault.hashicorp.com/agent-inject-secret-database.yaml: secret
+#               # vault.hashicorp.com/agent-inject-template-database.yaml: |
+#               #   <template konten dari Vault>
+#           spec:
+#             serviceAccountName: "v-<vault-role-crons>"
+#             tolerations:
+#             - key: "env"
+#               operator: "Equal"
+#               value: "cronjob"
+#               effect: "NoSchedule"
+#             nodeSelector:
+#               env: cronjob
+#             containers:
+#             - name: gold-gym-be-v2-masterproduct-cron
+#               image: "<registry>/gold-gym-be-v2:<tag>"
+#               imagePullPolicy: IfNotPresent
+#               env:
+#               - name: POD_NAME
+#                 valueFrom:
+#                   fieldRef:
+#                     fieldPath: metadata.name
+#               - name: POD_NAMESPACE
+#                 valueFrom:
+#                   fieldRef:
+#                     fieldPath: metadata.namespace
+#               volumeMounts:
+#               - name: tz-config
+#                 mountPath: /etc/localtime
+#             volumes:
+#             - name: tz-config
+#               hostPath:
+#                 path: /usr/share/zoneinfo/Asia/Jakarta
+#             restartPolicy: Never

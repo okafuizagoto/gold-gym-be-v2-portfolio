@@ -1,0 +1,69 @@
+apiVersion: v1
+kind: Service
+metadata:
+{{- if and .Values.keda.enabled (or (contains "development" .Release.Namespace) (contains "staging" .Release.Namespace)) }}
+  name: {{ .Values.service.name }}-master
+{{- else }}
+  name: {{ .Values.service.name }}
+{{- end }}
+  labels:
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}"
+    app: {{ .Chart.Name }}
+
+{{- if .Values.service.annotations }}
+  annotations:
+{{ toYaml .Values.service.annotations | indent 4 }}
+{{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+  - port: {{ .Values.service.externalPort }}
+    targetPort: {{ .Values.service.internalPort }}
+    protocol: TCP
+    name: http
+
+  - name: grpc
+    port: 50051
+    targetPort: 50051
+    protocol: TCP
+  selector:
+    app: {{ .Chart.Name }}
+
+{{- if and .Values.keda.enabled (or (contains "development" .Release.Namespace) (contains "staging" .Release.Namespace)) }}
+
+---
+{{- $ns := ternary "dev" "staging" (eq "development" .Release.Namespace) -}}
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.service.name }}
+  namespace: {{.Release.Namespace}}
+spec:
+  type: ExternalName
+  externalName: keda-add-ons-http-interceptor-proxy-clone.keda.svc.cluster.local
+
+---
+apiVersion: http.keda.sh/v1alpha1
+kind: HTTPScaledObject
+metadata:
+  name: {{ .Values.service.name }}
+  namespace: {{.Release.Namespace}}
+spec:
+  hosts:
+  - {{ .Values.service.name }}.{{ .Release.Namespace }}
+
+  pathPrefixes:
+  - /gold-gym
+
+  scaleTargetRef:
+    deployment: {{ .Values.service.name }}
+    service: {{ .Values.service.name }}-master
+    port: 80
+
+  replicas:
+    min: 0
+    max: 1
+
+  scaledownPeriod: 14400
+{{- end }}

@@ -1,0 +1,61 @@
+replicaCount: 1
+
+vault:
+  enabled: false
+keda:
+  enabled: false
+
+image:
+  repository: gold-gym-be-v2
+  tag: dev
+  pullPolicy: Never
+
+env:
+  CONFIG_PATH: /app/files/etc/gold-gym-be/gold-gym-be.staging.yaml
+hpa:
+  enabled: false
+service:
+  name: gold-gym-be-v2
+
+  type: ClusterIP
+
+  externalPort: 80
+
+  internalPort: 8080
+
+resources:
+  production:
+    limits:
+      cpu: 80m
+      memory: 256Mi
+    requests:
+      cpu: 20m
+      memory: 40Mi
+  staging:
+    requests:
+      cpu: 0m
+      memory: 10Mi
+
+probePath: /healthz
+
+livenessProbe:
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  successThreshold: 1
+  timeoutSeconds: 1
+
+readinessProbe:
+  failureThreshold: 1
+  periodSeconds: 10
+  successThreshold: 1
+  timeoutSeconds: 1
+
+terminationGracePeriodSeconds: 30
+
+podAnnotations:
+  vault:
+    enabled: false
+
+redis:
+  host: "redis"
+  password: "StrongRedisPassword12345"

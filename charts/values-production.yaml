@@ -1,0 +1,61 @@
+# values-production.yaml
+replicaCount: 2
+targetEnv: production
+
+vault:
+  enabled: false
+keda:
+  enabled: false
+
+image:
+  repository: okafuizgt/gold-gym-be-v2
+  tag: prod
+  pullPolicy: Always
+  pullSecretName: dockerhub-pull-secret
+
+env:
+  CONFIG_PATH: /app/files/etc/gold-gym-be/gold-gym-be.production.yaml
+  NODE_ENV: production
+  LOG_LEVEL: info
+
+redis:
+  host: "redis.gold-gym-production.svc.cluster.local"
+  password: "CHANGE_ME"
+
+hpa:
+  enabled: false
+
+service:
+  name: gold-gym-be-v2
+  type: ClusterIP # ← Production standard!
+  externalPort: 80
+  internalPort: 8080
+
+resources:
+  production:
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+
+probePath: /healthz
+
+livenessProbe:
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  successThreshold: 1
+  timeoutSeconds: 1
+
+readinessProbe:
+  failureThreshold: 3
+  periodSeconds: 10
+  successThreshold: 1
+  timeoutSeconds: 1
+
+terminationGracePeriodSeconds: 30
+
+podAnnotations:
+  vault:
+    enabled: false

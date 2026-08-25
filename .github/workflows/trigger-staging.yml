@@ -1,0 +1,36 @@
+name: Trigger Jenkins Staging
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  trigger-jenkins:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Get Jenkins Crumb (with cookie session)
+        id: crumb
+        run: |
+          curl -s -c cookies.txt \
+            -u "${{ secrets.JENKINS_USER }}:${{ secrets.JENKINS_TOKEN }}" \
+            "${{ secrets.JENKINS_URL }}/crumbIssuer/api/json" \
+            -o crumb.json
+
+          CRUMB=$(cat crumb.json | jq -r '.crumb')
+          echo "crumb=$CRUMB" >> $GITHUB_OUTPUT
+
+      - name: Trigger Jenkins Build
+        run: |
+          curl -X POST \
+            -b cookies.txt \
+            -u "${{ secrets.JENKINS_USER }}:${{ secrets.JENKINS_TOKEN }}" \
+            -H "Jenkins-Crumb: ${{ steps.crumb.outputs.crumb }}" \
+            "${{ secrets.JENKINS_URL }}/job/gold-gym-be-v2-staging/build"
+
+          echo "[trigger-staging] Build triggered"
+          echo "Monitor: ${{ secrets.JENKINS_URL }}/job/gold-gym-be-v2-staging/"

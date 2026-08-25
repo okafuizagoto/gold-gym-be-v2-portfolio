@@ -1,0 +1,70 @@
+# values-staging.yaml
+replicaCount: 1
+
+# targetEnv menentukan cabang production/staging di template (resources,
+# hpa) -- TIDAK pakai .Release.Namespace lagi karena release "gold-gym-be-v2"
+# ternyata salah tercatat namespace-nya secara internal di Helm (lihat
+# catatan-perbaikan-tertunda.txt poin 5). Default staging; production
+# override lewat values-production.yaml + --set targetEnv=production.
+targetEnv: staging
+
+vault:
+  enabled: false
+keda:
+  enabled: false
+
+image:
+  # Pull langsung dari Docker Hub (repo privat) -- tidak lagi disuntik manual
+  # ke node via docker save/ctr import. pullSecretName merujuk ke Secret
+  # docker-registry yang harus ada di tiap namespace (dockerhub-pull-secret).
+  repository: okafuizgt/gold-gym-be-v2
+  tag: dev
+  pullPolicy: Always
+  pullSecretName: dockerhub-pull-secret
+
+env:
+  CONFIG_PATH: /app/files/etc/gold-gym-be/gold-gym-be.staging.yaml
+  NODE_ENV: staging
+  LOG_LEVEL: debug
+
+redis:
+  host: "redis.gold-gym-staging.svc.cluster.local"
+  password: "CHANGE_ME"
+
+hpa:
+  enabled: false
+
+service:
+  name: gold-gym-be-v2
+  type: ClusterIP # ← Production standard!
+  externalPort: 80
+  internalPort: 8080
+
+resources:
+  staging:
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+
+probePath: /healthz
+
+livenessProbe:
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  successThreshold: 1
+  timeoutSeconds: 1
+
+readinessProbe:
+  failureThreshold: 3
+  periodSeconds: 10
+  successThreshold: 1
+  timeoutSeconds: 1
+
+terminationGracePeriodSeconds: 30
+
+podAnnotations:
+  vault:
+    enabled: false

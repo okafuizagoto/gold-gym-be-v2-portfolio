@@ -1,0 +1,43 @@
+# Konfigurasi air (hot reload) untuk gold-gym-be-v2.
+# Jalankan dari root proyek: `air`
+# Setiap simpan file .go -> otomatis build ulang + restart backend.
+# Hanya untuk pengembangan lokal (bukan staging/produksi).
+
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  # Build binary sementara ke tmp/, lalu jalankan.
+  cmd = "go build -o ./tmp/gold-gym-http ./cmd/http/main.go"
+  bin = "./tmp/gold-gym-http"
+  full_bin = ""
+
+  # Hanya pantau file Go.
+  include_ext = ["go"]
+
+  # Folder yang TIDAK perlu dipantau (menghindari reload sia-sia).
+  exclude_dir = ["tmp", "vendor", "bin", "docs", "files", "charts", "ztestcharts", "proto", ".git", ".github"]
+
+  # Abaikan file test supaya save test tidak restart server.
+  exclude_regex = ["_test.go"]
+
+  # Jangan restart kalau hanya file yang berubah tanpa perubahan build.
+  exclude_unchanged = true
+
+  # Beri jeda 800ms setelah save supaya editor selesai menulis semua file.
+  delay = 800
+
+  # Kalau build gagal, tampilkan error di terminal dan TETAP hidupkan proses lama.
+  stop_on_error = false
+
+  # Kirim sinyal interrupt supaya proses lama shutdown rapih (Kafka consumer, dll)
+  # sebelum yang baru start -> hindari "address already in use".
+  send_interrupt = true
+  kill_delay = "2s"
+
+[log]
+  time = true
+
+[misc]
+  # Hapus folder tmp/ saat air ditutup.
+  clean_on_exit = true

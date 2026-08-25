@@ -1,0 +1,113 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Chart.Name }}
+  labels:
+    app: {{ .Chart.Name }}
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}"
+    release: {{ .Release.Name }}
+spec:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
+  selector:
+    matchLabels:
+      app: {{ .Chart.Name }}
+
+  {{- if and .Values.hpa.enabled (eq .Values.targetEnv "production") }}
+  {{- else }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+
+  template:
+    metadata:
+      labels:
+        app: {{ .Chart.Name }}
+
+    spec:
+      {{- if .Values.image.pullSecretName }}
+      imagePullSecrets:
+        - name: {{ .Values.image.pullSecretName }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 2000
+
+      volumes:
+        - name: app-config
+          configMap:
+            name: {{ .Chart.Name }}-config
+        # foto bukti pembayaran: hostPath di node kind (/var/storages/photos).
+        # /var di node kind = Docker volume di server, jadi file tetap ada
+        # walau pod/cluster restart; di server path aslinya di
+        # /var/lib/docker/volumes/<id>/_data/storages/photos dan
+        # /root/storages/photos dibuat symlink ke sana.
+        - name: photo-storage
+          hostPath:
+            path: /var/storages/photos
+            type: DirectoryOrCreate
+
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          env:
+          {{- range $key, $value := .Values.env }}
+          - name: {{ $key }}
+            value: {{ $value | quote }}
+          {{- end }}
+          - name: SMTP_EMAIL
+            valueFrom:
+              secretKeyRef:
+                name: goldgym-smtp-secret
+                key: SMTP_EMAIL
+          - name: SMTP_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: goldgym-smtp-secret
+                key: SMTP_PASSWORD
+
+          volumeMounts:
+            - name: app-config
+              mountPath: /app/files/etc/gold-gym-be
+              readOnly: true
+            # dipasang tepat di path default backend (PHOTO_STORAGE_DIR)
+            - name: photo-storage
+              mountPath: /root/storages/photos
+
+          ports:
+            - containerPort: {{ .Values.service.internalPort }}
+              name: http
+
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probePath }}
+              port: {{ .Values.service.internalPort }}
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+            successThreshold: {{ .Values.livenessProbe.successThreshold }}
+            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probePath }}
+              port: {{ .Values.service.internalPort }}
+            initialDelaySeconds: 30
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+            successThreshold: {{ .Values.readinessProbe.successThreshold }}
+            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
+
+          resources:
+{{- if eq .Values.targetEnv "production" }}
+{{ toYaml .Values.resources.production | indent 12 }}
+{{- else }}
+{{ toYaml .Values.resources.staging | indent 12 }}
+{{- end }}
+
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}

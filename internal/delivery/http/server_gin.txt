@@ -1,0 +1,66 @@
+package http
+
+import (
+	"github.com/gin-gonic/gin"
+
+	authHandler "gold-gym-be/internal/delivery/http/auth"
+	goldgymHandler "gold-gym-be/internal/delivery/http/goldgym"
+)
+
+// Server adalah HTTP server berbasis Gin
+type Server struct {
+	Goldgym *goldgymHandler.Handler
+	Auth    *authHandler.Handler
+}
+
+// NewServer membuat instance Gin server
+func NewServer(
+	goldgym *goldgymHandler.Handler,
+	auth *authHandler.Handler,
+) *Server {
+	return &Server{
+		Goldgym: goldgym,
+		Auth:    auth,
+	}
+}
+
+// Run menjalankan Gin HTTP server
+func (s *Server) Run(port string) error {
+	// Set mode jika perlu (release / debug)
+	// gin.SetMode(gin.ReleaseMode)
+
+	r := gin.New()
+
+	// Global middleware
+	r.Use(
+		gin.Logger(),
+		gin.Recovery(),
+	)
+
+	// Health check
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status":  "ok",
+			"service": "gold-gym-be",
+		})
+	})
+
+	// =========================
+	// API ROUTES
+	// =========================
+	api := r.Group("/gold-gym/v2")
+	{
+		user := api.Group("/userdata")
+		{
+			user.GET("", s.Goldgym.GetGoldGymGin)
+			user.POST("", s.Goldgym.InsertGoldGym)
+			user.PUT("", s.Goldgym.UpdateGoldGym)
+			user.DELETE("", s.Goldgym.DeleteGoldGym)
+
+			user.POST("/login", s.Auth.LoginUser)
+		}
+	}
+
+	// Start server
+	return r.Run(":" + port)
+}

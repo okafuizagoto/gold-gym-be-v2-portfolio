@@ -1,0 +1,204 @@
+version: '3.8'
+
+services:
+# prod
+# app:
+#   build: .
+#   container_name: golang-app
+#   depends_on:
+#     - kafka
+#     - mysql
+#   environment:
+#     - KAFKA_BROKER=kafka:29092
+#     - MYSQL_HOST=mysql
+#     - MYSQL_USER=CHANGE_ME
+#     - MYSQL_PASSWORD=CHANGE_ME
+#     - MYSQL_DB=u868654674_gold_gym_bez
+#   ports:
+#     - "8080:8080"
+#   volumes:
+#     - ./files/etc/gold-gym-be:/app/files/etc/gold-gym-be   # hanya mount config
+#   working_dir: /app
+#   command: ./main
+#   restart: unless-stopped
+#   healthcheck:
+#     test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+#     interval: 30s
+#     timeout: 10s
+#     retries: 5
+#     start_period: 20s
+
+  # app:
+  #   image: golang:1.23
+  #   container_name: golang-app
+  #   depends_on:
+  #     - kafka
+  #     - mysql
+  #   environment:
+  #     - KAFKA_BROKER=kafka:29092
+  #     - MYSQL_HOST=mysql
+  #     - MYSQL_USER=CHANGE_ME
+  #     - MYSQL_PASSWORD=CHANGE_ME
+  #     - MYSQL_DB=u868654674_gold_gym_bez
+  #   ports:
+  #     - "8080:8080"
+  #   volumes:
+  #     - .:/app
+  #   working_dir: /app
+  #   command: go run cmd/http/main.go
+  #   restart: unless-stopped
+  # api:
+  #   build: .
+  mysql:
+    image: mysql:8.0
+    container_name: mysql-local
+    environment:
+      MYSQL_ROOT_PASSWORD: CHANGE_ME
+      # Root password
+      MYSQL_DATABASE: u868654674_gold_gym_bez
+      # Default database (optional)
+      MYSQL_USER: CHANGE_ME
+      # Custom username
+      MYSQL_PASSWORD: CHANGE_ME
+      # Custom password for that user
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    command: >
+      --gtid_mode=ON
+      --enforce_gtid_consistency=ON
+      --log_bin=binlog
+      --binlog_format=ROW
+      --server-id=1
+      --binlog_row_image=FULL
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-pCHANGE_ME"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  zookeeper:
+    image: quay.io/debezium/zookeeper:latest
+    ports:
+      - 2181:2181
+      - 2888:2888
+      - 3888:3888
+    container_name: zookeeper
+    restart: unless-stopped 
+    healthcheck: 
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  
+  kafka:
+    image: quay.io/debezium/kafka:latest
+    ports:
+      # - 9092:9092
+      - 9092:9092   # akses dari host (Go app lokal)
+      - 29092:29092 # akses internal antar container
+    # links:
+    #   - zookeeper # <--- ini digunakan jika app nya tidak di docker
+    environment:
+      - ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true # <--- di prod harus di false, karena biar topic yang dibuat eksplisit/fix
+      - KAFKA_BROKER_ID=1
+      # - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092
+      # - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092  # <--- OPSI B di sini
+      # ========
+      - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092,PLAINTEXT_INTERNAL://0.0.0.0:29092
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
+      - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT_INTERNAL
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+    depends_on:
+      - zookeeper
+    restart: unless-stopped 
+    healthcheck: 
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  debezium:
+    image: quay.io/debezium/connect:latest
+    ports:
+      - 8083:8083
+    links:
+      - kafka
+      - mysql
+    environment:
+      # - BOOTSTRAP_SERVERS=kafka:9092
+      - BOOTSTRAP_SERVERS=kafka:29092
+      - GROUP_ID=1
+      - CONFIG_STORAGE_TOPIC=my_connect_configs
+      - OFFSET_STORAGE_TOPIC=my_connect_offsets
+      - STATUS_STORAGE_TOPIC=my_connect_statuses
+    volumes:
+      - ./plugins:/kafka/libs/plugins
+    restart: unless-stopped 
+    healthcheck: 
+      test: ["CMD", "curl", "-f", "http://localhost:8083/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      
+  networks:
+    gold-gym-be_default:
+      external: true
+
+  kafka-connect:
+    image: confluentinc/cp-kafka-connect:latest
+    volumes:
+      - ./connectors:/connectors
+      - ./plugins:/usr/share/java
+    environment:
+      CONNECT_PLUGIN_PATH: /usr/share/java
+    command:
+      - bash
+      - -c
+      - |
+        /etc/confluent/docker/run &
+        sleep 10
+        curl -i -X POST -H "Accept:application/json" -H "Content-Type:application/json" http://localhost:8083/connectors/ --data "@debezium.json"
+        wait
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node        # single node untuk dev lokal
+      - xpack.security.enabled=false      # matikan auth (dev only, jangan di prod)
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m   # heap size — sesuaikan RAM tersedia
+    ports:
+      - "9200:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    restart: unless-stopped
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.12.0
+    container_name: kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200  # koneksi ke ES di docker network
+    ports:
+      - "5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5601/api/status"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
+  es-data:      # persistent storage untuk Elasticsearch

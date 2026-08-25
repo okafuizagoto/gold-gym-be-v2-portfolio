@@ -1,0 +1,41 @@
+server:
+  port: "8080"
+  grpc_port: "50051"
+  env: "staging"
+database:
+  # master: "CHANGE_ME:CHANGE_ME@mysql+tcp(localhost:3306)/butuhdok_gold_gym_be"
+  # 2026-08-14: sempat dicoba pindah ke MariaDB lokal di VPS, tapi diputuskan
+  # staging tetap di Hostinger — DB lokal di VPS kini dikhususkan untuk
+  # production saja (lihat gold-gym-be.production.yaml).
+  master: "CHANGE_ME:CHANGE_ME@tcp(srv1155.hstgr.io:3306)/u868654674_gold_gym_bez"
+  production: "CHANGE_ME:CHANGE_ME@tcp(srv1155.hstgr.io:3306)/u868654674_gold_gym_bez"
+  # firebase:
+  #   fcmProjectIDB2BPelapak: "gofirebase"
+api:
+  auth: "http://auth.staging/auth"
+swagger:
+  host: "localhost:8080"
+  schemes:
+    - http
+redis:
+  host: "redis:6379"
+  password: "CHANGE_ME"
+  db: 0
+firebase:
+  projectID: "gofirebase"
+  databaseURL: "https://gofirebase-default-rtdb.asia-southeast1.firebasedatabase.app/"
+  storageBucket: "gofirebase.appspot.com" # optional but recommended if you use Firebase Storage
+discord:
+  webhook: "https://discordapp.com/api/webhooks/CHANGE_ME/CHANGE_ME"
+kafka:
+  brokers:
+    - "kafka:29092"
+  # -v3: group baru lagi agar consumer membaca ulang topic dari awal
+  # (FirstOffset) — memulihkan transaksi yang gagal FK 1452 sale_cust_id
+  # sejak deploy -v2 (FK sudah diperbaiki, sekarang aman diproses ulang).
+  group_id: "goldgym-sync-group-staging-v3"
+  topics:
+    local_to_prod: "staging.mysql_server.u868654674_gold_gym_bez.data_peserta" # ← prefix staging.
+    prod_to_local: "staging.mysql_server.u868654674_gold_gym_bez.data_peserta"
+    http_insert: "staging.goldgym.http.insert_user"
+    sales: "staging.goldgym.http.sales_insert"

@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: gold-gym-be-v2
+  namespace: gold-gym-staging
+spec:
+  type: ClusterIP
+  selector:
+    app: gold-gym-be-v2
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+    - name: grpc
+      port: 50051
+      targetPort: 50051
+      protocol: TCP

@@ -1,0 +1,84 @@
+// ==============================================================
+// Jenkinsfile.local
+//   → Simplified pipeline untuk local development.
+//   → Dipakai di Jenkins localhost:8081
+//   → Tidak include: Vault, ChartMuseum, Discord, shared library.
+//   → Stages: Compile → Dockerize → done.
+// ==============================================================
+pipeline {
+    agent any
+
+    environment {
+        NAME = "gold-gym-be-v2"
+        GO_BIN = "/usr/local/go/bin"
+    }
+
+    stages {
+        // ==============================================================
+        // Stage 1: Compile
+        //   → Build Go binary menggunakan Makefile.
+        //   → PATH di-tambah dengan Go binary path.
+        //   → Output: bin/gold-gym-be (binary)
+        // ==============================================================
+        stage('Compile') {
+            steps {
+                sh """
+                    export PATH=\${PATH}:${GO_BIN}
+                    go version
+                    make build
+                    ls -la bin/
+                """
+            }
+        }
+
+        // ==============================================================
+        // Stage 2: Dockerize
+        //   → Build Docker image dari Dockerfile di root project.
+        //   → Image name: gold-gym-be-v2:latest
+        //   → Tidak di-push ke registry (local only).
+        // ==============================================================
+        stage('Dockerize') {
+            steps {
+                sh """
+                    docker build -t ${NAME}:latest .
+                    docker images ${NAME}
+                """
+            }
+        }
+
+        // ==============================================================
+        // Stage 3: Helm Lint (optional)
+        //   → Validasi syntax Helm chart.
+        //   → Hanya lint, tidak package atau upload.
+        // ==============================================================
+        stage('Helm Lint') {
+            steps {
+                sh """
+                    cd charts
+                    # Replace placeholder sebelum lint
+                    sed -i 's/name: NAME/name: ${NAME}/g' Chart.yaml
+                    sed -i 's/tag: dev/tag: local/g' values.yaml
+                    helm lint . || echo "Helm tidak terinstall, skip lint"
+                """
+            }
+        }
+    }
+
+    // ==============================================================
+    // post
+    //   → Cleanup dan status reporting.
+    // ==============================================================
+    post {
+        always {
+            cleanWs()
+        }
+        success {
+            echo "=== Pipeline sukses! ==="
+            echo "Binary : bin/gold-gym-be"
+            echo "Image  : ${NAME}:latest"
+        }
+        failure {
+            echo "=== Pipeline gagal. Check logs di atas. ==="
+        }
+    }
+}
