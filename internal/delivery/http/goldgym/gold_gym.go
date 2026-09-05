@@ -41,6 +41,9 @@ type IgoldgymSvc interface {
 	GetTestingImage(ctx context.Context, id int) ([]byte, error)
 
 	RegisterBuyer(ctx context.Context, req goldEntity.RegisterBuyerRequest) (goldEntity.BuyerRow, error)
+
+	GetRegistrationMode(ctx context.Context) (string, error)
+	SetRegistrationMode(ctx context.Context, mode string, updatedBy string) error
 }
 
 type (

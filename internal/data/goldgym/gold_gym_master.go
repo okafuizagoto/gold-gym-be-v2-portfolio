@@ -414,3 +414,37 @@ func (d *Data) CountGoldUsers(ctx context.Context) (int64, error) {
 	}
 	return total, nil
 }
+
+// GetRegistrationMode mode pendaftaran mandiri saat ini (app_settings.registration_mode):
+// BOTH (default, bisa pilih pembeli/penjual), BUYER_ONLY, atau SELLER_ONLY.
+// Baris belum ada / nilai kosong dianggap BOTH (default aman: perilaku
+// existing tidak berubah sampai admin eksplisit mengubah).
+func (d *Data) GetRegistrationMode(ctx context.Context) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, dbTimeout)
+	defer cancel()
+	var value string
+	err := d.db.WithContext(ctx).
+		Table("app_settings").
+		Select("setting_value").
+		Where("setting_key = ?", "registration_mode").
+		Limit(1).
+		Scan(&value).Error
+	if err != nil {
+		return "", err
+	}
+	value = strings.ToUpper(strings.TrimSpace(value))
+	if value == "" {
+		return "BOTH", nil
+	}
+	return value, nil
+}
+
+func (d *Data) SetRegistrationMode(ctx context.Context, mode string, updatedBy string) error {
+	ctx, cancel := context.WithTimeout(ctx, dbTimeout)
+	defer cancel()
+	return d.db.WithContext(ctx).
+		Exec(`INSERT INTO app_settings (setting_key, setting_value, updated_by)
+              VALUES (?, ?, ?)
+              ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by)`,
+			"registration_mode", mode, updatedBy).Error
+}

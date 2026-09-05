@@ -198,6 +198,39 @@ func bufferRequestBody(c *gin.Context) string {
 	return truncate(string(bodyBytes), 1500)
 }
 
+// bodyCaptureWriter membungkus gin.ResponseWriter untuk menyalin body respons
+// ke buffer, tanpa mengubah apa yang dikirim ke client. Dipakai ErrorAlert
+// sebagai fallback isi "Error" ke Discord -- mayoritas handler di codebase
+// ini langsung `c.JSON(500, gin.H{"error": err.Error()})` TANPA memanggil
+// c.Error(), jadi c.Errors selalu kosong dan tanpa fallback ini field Error
+// di Discord selalu "-".
+type bodyCaptureWriter struct {
+	gin.ResponseWriter
+	buf bytes.Buffer
+}
+
+func (w *bodyCaptureWriter) Write(b []byte) (int, error) {
+	w.buf.Write(b)
+	return w.ResponseWriter.Write(b)
+}
+
+func (w *bodyCaptureWriter) WriteString(s string) (int, error) {
+	w.buf.WriteString(s)
+	return w.ResponseWriter.WriteString(s)
+}
+
+// extractErrorFromResponseBody mengambil field "error" dari body JSON respons
+// -- lihat komentar bodyCaptureWriter.
+func extractErrorFromResponseBody(body []byte) string {
+	var parsed struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return ""
+	}
+	return parsed.Error
+}
+
 // ErrorAlert mem-buffer body request lalu, kalau response akhirnya berstatus
 // >=500, mengirim detail lengkap (user, outlet, endpoint, waktu, body, dsb)
 // ke Discord. Panic ditangani terpisah lewat AlertPanic (lihat handler.go)
@@ -206,6 +239,9 @@ func ErrorAlert() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 		bodySnippet := bufferRequestBody(c)
+
+		capture := &bodyCaptureWriter{ResponseWriter: c.Writer}
+		c.Writer = capture
 
 		c.Next()
 
@@ -217,6 +253,9 @@ func ErrorAlert() gin.HandlerFunc {
 		errMsg := ""
 		if len(c.Errors) > 0 {
 			errMsg = c.Errors.String()
+		}
+		if errMsg == "" {
+			errMsg = extractErrorFromResponseBody(capture.buf.Bytes())
 		}
 
 		buildAndSendAlert(c, status, errMsg, "", bodySnippet, time.Since(start))

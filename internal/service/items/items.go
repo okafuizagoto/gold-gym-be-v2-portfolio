@@ -6,6 +6,7 @@ import (
 	"gold-gym-be/internal/entity"
 	goldEntity "gold-gym-be/internal/entity/goldgym"
 	goldItemsEntity "gold-gym-be/internal/entity/items"
+	goldQuotaEntity "gold-gym-be/internal/entity/quota"
 
 	jaegerLog "gold-gym-be/pkg/log"
 
@@ -27,6 +28,12 @@ type Data interface {
 	WithTransactionItems(ctx context.Context, fn func(tx *gorm.DB) error) error
 	EnsureTherapyStock(ctx context.Context, goldid int, outcode string) error
 	GetOutletCodesByGoldID(ctx context.Context, goldid int) ([]string, error)
+	GetItemByID(ctx context.Context, itemID int) (goldItemsEntity.Item, error)
+	UpdateItemPhoto(ctx context.Context, itemID int, filename string, bytes int) error
+	ClearItemPhoto(ctx context.Context, itemID int) error
+	GetUserStorageUsedKB(ctx context.Context, goldID int) (int, error)
+	AddUserStorageUsedKB(ctx context.Context, goldID int, deltaKB int) error
+	InsertStorageDeleteHistory(ctx context.Context, h goldQuotaEntity.StorageDeleteHistory) error
 }
 
 type UserData interface {

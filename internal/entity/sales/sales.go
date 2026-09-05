@@ -60,6 +60,19 @@ type ThSale struct {
 	SaleVoucherCode    *string          `gorm:"column:sale_voucher_code" db:"sale_voucher_code" json:"sale_voucher_code,omitempty"`
 	SaleVoucherPercent *decimal.Decimal `gorm:"column:sale_voucher_percent" db:"sale_voucher_percent" json:"sale_voucher_percent,omitempty"`
 	SaleVoucherAmount  *decimal.Decimal `gorm:"column:sale_voucher_amount" db:"sale_voucher_amount" json:"sale_voucher_amount,omitempty"`
+	// Metode pembayaran (TUNAI/BANK/DEBIT/TRANSFER) -- dikirim dari FE saat
+	// checkout POS, dibutuhkan Sales History untuk membedakan "tidak ada
+	// bukti transfer karena tunai" vs "bukti belum diupload". NULL untuk nota
+	// lama sebelum kolom ini ada.
+	SalePayType *string `gorm:"column:sale_pay_type" db:"sale_pay_type" json:"sale_pay_type,omitempty"`
+	// Nomor meja gabungan (mis. "A1, A3"), dipisah koma -- diisi HANDLER
+	// (bukan klien) dengan menerjemahkan MejaIDs (lihat InsertSales) jadi
+	// nama meja SEBELUM publish ke Kafka, supaya ikut tersimpan di baris
+	// insert th_sale yang sama. NULL = tidak ada meja dipilih (outlet non-
+	// retail, atau kasir tidak memilih meja). Dipakai Sales History &
+	// nota (lihat sales_receipt.go) -- sumber lebih lengkap per-meja tetap
+	// ada di sale_meja (lihat modul meja).
+	SaleMejaNames *string `gorm:"column:sale_meja_names" db:"sale_meja_names" json:"sale_meja_names,omitempty"`
 }
 
 type ThSaleCounter struct {
@@ -96,6 +109,12 @@ type InsertSales struct {
 	// (digabung barang lain jadi satu nota di POS) — handler menandai
 	// booking tersebut PAID dengan sale_id nota ini. Diabaikan consumer Kafka.
 	BookingIDs []string `json:"booking_ids,omitempty"`
+	// MejaIDs meja (tabel) yang direservasi kasir di picker POS untuk
+	// transaksi ini (lihat modul meja). Sama pola dengan BookingIDs -- list
+	// ID terkait yang ditempel ke 1 nota, ditangani sinkron di handler
+	// (lihat insert_gold_gym_sales_gin.go) supaya sale_meja tercatat
+	// SEBELUM response 202 dikembalikan, tanpa perlu tunggu Kafka consumer.
+	MejaIDs []int `json:"meja_ids,omitempty"`
 	// TransDate ("2006-01-02") & TransTime ("15:04"/"15:04:05"): waktu transaksi
 	// manual, KHUSUS role ADMIN (handler mengosongkan untuk role lain).
 	// Kosong = waktu sekarang (live).
@@ -120,6 +139,10 @@ type PaymentProof struct {
 	ProofPath         string    `gorm:"column:proof_path" json:"proof_path"`
 	ProofUploadedBy   string    `gorm:"column:proof_uploaded_by" json:"proof_uploaded_by"`
 	ProofUploadedAt   time.Time `gorm:"column:proof_uploaded_at;autoCreateTime" json:"proof_uploaded_at"`
+	// ProofGoldID pemilik numerik (gold_id) -- kolom baru, dipakai kuota
+	// storage per-user & menu Storage. proof_uploaded_by tetap ada (legacy,
+	// string bebas) demi kompatibilitas baca lama.
+	ProofGoldID int `gorm:"column:proof_gold_id" json:"proof_gold_id,omitempty"`
 }
 
 func (PaymentProof) TableName() string {
@@ -164,6 +187,12 @@ type THSaleDetail struct {
 	// field ini yang benar-benar disimpan ke th_sale, bukan input klien.
 	SaleVoucherPercent *string `json:"sale_voucher_percent,omitempty"`
 	SaleVoucherAmount  *string `json:"sale_voucher_amount,omitempty"`
+	// Metode pembayaran (TUNAI/BANK/DEBIT/TRANSFER) -- dikirim dari FE,
+	// lihat komentar SalePayType di ThSale.
+	SalePayType *string `json:"sale_pay_type,omitempty"`
+	// Diisi HANDLER (bukan klien) dari MejaIDs sebelum publish ke Kafka --
+	// lihat komentar SaleMejaNames di ThSale.
+	SaleMejaNames *string `json:"sale_meja_names,omitempty"`
 }
 
 type TDSaleDetail struct {

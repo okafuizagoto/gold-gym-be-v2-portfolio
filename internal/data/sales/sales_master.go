@@ -3,6 +3,8 @@ package goldgym
 import (
 	"context"
 	"fmt"
+	goldMejaEntity "gold-gym-be/internal/entity/meja"
+	goldQuotaEntity "gold-gym-be/internal/entity/quota"
 	goldSaleEntity "gold-gym-be/internal/entity/sales"
 	"strings"
 	"time"
@@ -238,6 +240,39 @@ func (d *Data) InsertPaymentProof(ctx context.Context, proof goldSaleEntity.Paym
 	return proof, nil
 }
 
+// DeletePaymentProof menghapus metadata bukti pembayaran (dipanggil dari menu
+// Storage) -- tabel dedicated, row dihapus penuh (beda dari item_photo yang
+// cuma kolomnya di-null-kan karena menempel ke baris item).
+func (d *Data) DeletePaymentProof(ctx context.Context, proofID int) error {
+	return d.db.WithContext(ctx).Where("proof_id = ?", proofID).Delete(&goldSaleEntity.PaymentProof{}).Error
+}
+
+// GetUserStorageUsedKB kuota storage foto yang sudah terpakai satu user (KB).
+func (d *Data) GetUserStorageUsedKB(ctx context.Context, goldID int) (int, error) {
+	var usedKB int
+	err := d.db.WithContext(ctx).Table("data_peserta").
+		Select("gold_storage_used_kb").Where("gold_id = ?", goldID).
+		Scan(&usedKB).Error
+	if err != nil {
+		return 0, errors.Wrap(err, "[DATA][GetUserStorageUsedKB]")
+	}
+	return usedKB, nil
+}
+
+// AddUserStorageUsedKB menambah (atau mengurangi, deltaKB negatif) kuota
+// terpakai user -- tidak pernah turun di bawah 0.
+func (d *Data) AddUserStorageUsedKB(ctx context.Context, goldID int, deltaKB int) error {
+	return d.db.WithContext(ctx).Table("data_peserta").
+		Where("gold_id = ?", goldID).
+		Update("gold_storage_used_kb", gorm.Expr("GREATEST(0, gold_storage_used_kb + ?)", deltaKB)).Error
+}
+
+// InsertStorageDeleteHistory mencatat foto yang dihapus dari menu Storage --
+// audit saja, belum ada tampilan untuk tabel ini.
+func (d *Data) InsertStorageDeleteHistory(ctx context.Context, h goldQuotaEntity.StorageDeleteHistory) error {
+	return d.db.WithContext(ctx).Create(&h).Error
+}
+
 // MarkBookingsPaid menandai booking terapi UNPAID menjadi PAID dengan sale_id
 // nota POS gabungan (booking ikut dibayar bersama barang lain dalam satu nota).
 func (d *Data) MarkBookingsPaid(ctx context.Context, bookingIDs []string, saleID string) (int64, error) {
@@ -253,6 +288,69 @@ func (d *Data) MarkBookingsPaid(ctx context.Context, bookingIDs []string, saleID
 		})
 	if res.Error != nil {
 		return 0, errors.Wrap(res.Error, "[DATA][MarkBookingsPaid]")
+	}
+	return res.RowsAffected, nil
+}
+
+// GetMejaNamesByIDs mengambil nama meja (urut alfabetis, mis. A1 sebelum
+// A3) untuk sekumpulan meja_id -- dipakai HANDLER untuk mengisi
+// ThSale.SaleMejaNames SEBELUM publish ke Kafka (lihat komentar
+// SaleMejaNames di entity). Query langsung ke tabel meja dari paket sales
+// sendiri, sama pola dengan MarkBookingsPaid yang query tabel booking
+// langsung -- bukan lewat service meja terpisah.
+func (d *Data) GetMejaNamesByIDs(ctx context.Context, outcode string, mejaIDs []int) ([]string, error) {
+	if len(mejaIDs) == 0 {
+		return nil, nil
+	}
+	var names []string
+	err := d.db.WithContext(ctx).
+		Table("meja").
+		Where("meja_id IN ? AND meja_outcode = ?", mejaIDs, outcode).
+		Order("meja_name ASC").
+		Pluck("meja_name", &names).Error
+	if err != nil {
+		return nil, errors.Wrap(err, "[DATA][GetMejaNamesByIDs]")
+	}
+	return names, nil
+}
+
+// ConfirmSaleMeja menyalin nama meja saat ini (snapshot) ke sale_meja untuk
+// nota ini. Tidak mengubah meja_status -- meja sudah ISI sejak direservasi
+// kasir di picker POS (lihat modul meja); di sini murni "tandai dipakai
+// nota X" supaya nota bisa cetak "No Meja" (lihat GetSaleMejaNames &
+// sales_receipt.go).
+func (d *Data) ConfirmSaleMeja(ctx context.Context, mejaIDs []int, outcode, saleID string) (int64, error) {
+	if len(mejaIDs) == 0 {
+		return 0, nil
+	}
+
+	var rowsFound []struct {
+		MejaID   int
+		MejaName string
+	}
+	if err := d.db.WithContext(ctx).
+		Table("meja").
+		Select("meja_id, meja_name").
+		Where("meja_id IN ? AND meja_outcode = ?", mejaIDs, outcode).
+		Find(&rowsFound).Error; err != nil {
+		return 0, errors.Wrap(err, "[DATA][ConfirmSaleMeja]")
+	}
+	if len(rowsFound) == 0 {
+		return 0, nil
+	}
+
+	saleMeja := make([]goldMejaEntity.SaleMeja, 0, len(rowsFound))
+	for _, r := range rowsFound {
+		saleMeja = append(saleMeja, goldMejaEntity.SaleMeja{
+			SaleID:   saleID,
+			MejaID:   r.MejaID,
+			MejaName: r.MejaName,
+		})
+	}
+
+	res := d.db.WithContext(ctx).Table("sale_meja").Create(&saleMeja)
+	if res.Error != nil {
+		return 0, errors.Wrap(res.Error, "[DATA][ConfirmSaleMeja]")
 	}
 	return res.RowsAffected, nil
 }

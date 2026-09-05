@@ -7,6 +7,8 @@ import (
 	"gold-gym-be/pkg/response"
 	"io/ioutil"
 	"log"
+	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/opentracing/opentracing-go"
@@ -178,4 +180,41 @@ func (h *Handler) UpdateGoldGymBuyerGin(c *gin.Context) {
 		return
 	}
 	c.JSON(200, gin.H{"data": result, "message": "akun terdaftar sebagai pembeli"})
+}
+
+// UpdateRegistrationModeGin menangani PUT /v2/userdata/registrationmode
+// (wajib token + role ADMIN) — atur mode pendaftaran mandiri (menu Akses
+// Admin -> Daftar Akun): BOTH / BUYER_ONLY / SELLER_ONLY.
+func (h *Handler) UpdateRegistrationModeGin(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	spanCtx, _ := h.tracer.Extract(opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(c.Request.Header))
+	span := h.tracer.StartSpan("UpdateRegistrationMode", ext.RPCServerOption(spanCtx))
+	defer span.Finish()
+	ctx = opentracing.ContextWithSpan(ctx, span)
+	h.logger.For(ctx).Info("HTTP request received", zap.String("method", c.Request.Method), zap.Stringer("url", c.Request.URL))
+
+	if c.GetString("role") != "ADMIN" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "hanya admin yang boleh mengubah pengaturan ini"})
+		return
+	}
+
+	var body struct {
+		Mode string `json:"mode"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	updatedBy := c.GetString("creator")
+	if updatedBy == "" {
+		updatedBy = strconv.Itoa(c.GetInt("user"))
+	}
+
+	if err := h.goldgymSvc.SetRegistrationMode(ctx, body.Mode, updatedBy); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"message": "mode pendaftaran tersimpan"})
 }

@@ -163,6 +163,11 @@ func (s Service) GetSaleReceiptPDF(ctx context.Context, goldid int, custid int, 
 			row("Toko Customer", toko)
 		}
 	}
+	// meja (fitur Atur Meja, retail) -- sudah tersimpan langsung di
+	// th_sale.sale_meja_names saat insert, tidak perlu query tambahan lagi.
+	if sale.Header.SaleMejaNames != nil && *sale.Header.SaleMejaNames != "" {
+		row("No Meja", *sale.Header.SaleMejaNames)
+	}
 	pdf.Ln(2)
 	divider()
 	pdf.Ln(2)

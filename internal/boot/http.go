@@ -86,6 +86,14 @@ import (
 	goldgymOutletHandler "gold-gym-be/internal/delivery/http/outlet"
 	goldgymOutletService "gold-gym-be/internal/service/outlet"
 
+	goldgymAreaData "gold-gym-be/internal/data/area"
+	goldgymAreaHandler "gold-gym-be/internal/delivery/http/area"
+	goldgymAreaService "gold-gym-be/internal/service/area"
+
+	goldgymMejaData "gold-gym-be/internal/data/meja"
+	goldgymMejaHandler "gold-gym-be/internal/delivery/http/meja"
+	goldgymMejaService "gold-gym-be/internal/service/meja"
+
 	goldgymCustomerData "gold-gym-be/internal/data/customer"
 	goldgymCustomerHandler "gold-gym-be/internal/delivery/http/customer"
 	goldgymCustomerService "gold-gym-be/internal/service/customer"
@@ -98,6 +106,10 @@ import (
 	goldgymSaleHandler "gold-gym-be/internal/delivery/http/sales"
 	goldgymSaleService "gold-gym-be/internal/service/sales"
 
+	goldgymStorageData "gold-gym-be/internal/data/storage"
+	goldgymStorageHandler "gold-gym-be/internal/delivery/http/storage"
+	goldgymStorageService "gold-gym-be/internal/service/storage"
+
 	goldgymBookingData "gold-gym-be/internal/data/booking"
 	goldgymBookingHandler "gold-gym-be/internal/delivery/http/booking"
 	goldgymBookingService "gold-gym-be/internal/service/booking"
@@ -105,6 +117,10 @@ import (
 	goldgymOrderData "gold-gym-be/internal/data/order"
 	goldgymOrderHandler "gold-gym-be/internal/delivery/http/order"
 	goldgymOrderService "gold-gym-be/internal/service/order"
+
+	goldgymSellerAccessData "gold-gym-be/internal/data/selleraccess"
+	goldgymSellerAccessHandler "gold-gym-be/internal/delivery/http/selleraccess"
+	goldgymSellerAccessService "gold-gym-be/internal/service/selleraccess"
 
 	goldgymRedisData "gold-gym-be/internal/data/redis"
 
@@ -303,13 +319,31 @@ func HTTP() error {
 	ssor := goldgymOrderService.New(sdor, tracer, zlogger)
 	shor := goldgymOrderHandler.New(ssor, kafkaProd, tracer, zlogger)
 
+	sdsa := goldgymSellerAccessData.New(db, tracer, zlogger)
+	sssa := goldgymSellerAccessService.New(sdsa, tracer, zlogger)
+	shsa := goldgymSellerAccessHandler.New(sssa, tracer, zlogger)
+
 	sdim := goldgymItemsData.New(db, dbr, tracer, zlogger)
 	ssim := goldgymItemsService.New(sdim, sd, sdrd, tracer, zlogger)
 	shim := goldgymItemsHandler.New(ssim, tracer, zlogger)
 
+	// Menu Storage -- dispatch delete ke Service items/sales yang sudah ada
+	// (ssim/sssls), tidak menduplikasi logika file/kuota.
+	sdsg := goldgymStorageData.New(db, tracer, zlogger)
+	sssg := goldgymStorageService.New(sdsg, ssim, sssls, tracer, zlogger)
+	shsg := goldgymStorageHandler.New(sssg, tracer, zlogger)
+
 	sdot := goldgymOutletData.New(db, dbr, tracer, zlogger)
 	ssot := goldgymOutletService.New(sdot, tracer, zlogger)
 	shot := goldgymOutletHandler.New(ssot, tracer, zlogger)
+
+	sdar := goldgymAreaData.New(db, dbr, tracer, zlogger)
+	ssar := goldgymAreaService.New(sdar, tracer, zlogger)
+	shar := goldgymAreaHandler.New(ssar, tracer, zlogger)
+
+	sdmj := goldgymMejaData.New(db, dbr, tracer, zlogger)
+	ssmj := goldgymMejaService.New(sdmj, tracer, zlogger)
+	shmj := goldgymMejaHandler.New(ssmj, tracer, zlogger)
 
 	shct := goldgymCustomerHandler.New(ssct, kafkaProd, tracer, zlogger)
 
@@ -473,11 +507,15 @@ func HTTP() error {
 		GoldgymItems:        shim,
 		GoldgymDiscount:     shdc,
 		GoldgymOutlet:       shot,
+		GoldgymArea:         shar,
+		GoldgymMeja:         shmj,
 		GoldgymCustomer:     shct,
 		GoldgymCustomerType: shctp,
 		GoldgymSale:         shsls,
+		GoldgymStorage:      shsg,
 		GoldgymBooking:      shbk,
 		GoldgymOrder:        shor,
+		GoldgymSellerAccess: shsa,
 		Auth:                sha,
 		Middleware:          mh,
 		Health:              hh,
@@ -662,3 +700,281 @@ func openFirebaseDatabaseClient(ctx context.Context, app *firebase.App) (*db.Cli
 	}
 	return client, nil
 }
+
+// package boot
+
+// import (
+// 	// "context"
+
+// 	"gold-gym-be/docs"
+// 	"gold-gym-be/internal/data/auth"
+// 	"net"
+
+// 	// "gold-gym-be/pkg/firebaseclient"
+// 	"gold-gym-be/pkg/httpclient"
+// 	"gold-gym-be/pkg/tracing"
+// 	"log"
+// 	"net/http"
+// 	"strings"
+
+// 	"gold-gym-be/internal/config"
+// 	jaegerLog "gold-gym-be/pkg/log"
+
+// 	// Log "gold-gym-be/pkg/logs"
+
+// 	"github.com/fsnotify/fsnotify"
+// 	"github.com/go-sql-driver/mysql"
+// 	"github.com/jmoiron/sqlx"
+// 	"github.com/spf13/viper"
+// 	"go.uber.org/zap"
+// 	"go.uber.org/zap/zapcore"
+// 	"golang.org/x/crypto/ssh"
+
+// 	// "golang.org/x/net/trace"
+// 	// "go.opentelemetry.io/otel/trace"
+// 	// "gold-gym-be/pkg/trace"
+
+// 	goldgymData "gold-gym-be/internal/data/goldgym"
+// 	goldgymServer "gold-gym-be/internal/delivery/http"
+// 	goldgymHandler "gold-gym-be/internal/delivery/http/goldgym"
+// 	goldgymService "gold-gym-be/internal/service/goldgym"
+// 	// pushNotifData "gold-gym-be/internal/data/pushnotif"
+// 	// pushNotifHandler "gold-gym-be/internal/delivery/http/pushnotif"
+// 	// pushNotifService "gold-gym-be/internal/service/pushnotif"
+// 	"github.com/casbin/casbin/v2"
+// 	"github.com/fsnotify/fsnotify"
+// 	"github.com/jmoiron/sqlx"
+// 	sqladapter "github.com/Blank-Xu/sqlx-adapter"
+// 	"github.com/spf13/viper"
+// 	"github.com/uptrace/opentelemetry-go-extra/otelsql"
+// 	"github.com/uptrace/opentelemetry-go-extra/otelsqlx"
+// 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+
+// 	logger "core-be/pkg/log"
+// 	"gold-gym-be/pkg/trace"
+// )
+
+// // // HTTP will load configuration, do dependency injection and then start the HTTP server
+// // func HTTP() error {
+// // 	// var (
+// // 	// 	ctx = context.Background()
+// // 	// )
+// // 	err := config.Init()
+// // 	if err != nil {
+// // 		log.Fatalf("[CONFIG] Failed to initialize config: %v", err)
+// // 	}
+// // 	cfg := config.Get()
+
+// // 	// t, err := trace.New(ctx, cfg.Trace.Exporter)
+// // 	// if err != nil {
+// // 	// 	log.Fatalf("[CONFIG] Failed to initialize tracer: %v", err)
+// // 	// }
+// // 	// defer t.Shutdown(ctx)
+
+// // 	// Open MySQL DB Connection
+// // 	db, err := openDatabases(cfg)
+// // 	if err != nil {
+// // 		log.Fatalf("[DB] Failed to initialize database connection: %v", err)
+// // 	}
+
+// // 	// Firebase Client Init
+// // 	// fcmCredB2BPelapak, err := firebaseclient.NewClient(cfg.Firebase.FcmProjectIDB2BPelapak, cred)
+// // 	// if err != nil {
+// // 	// 	log.Fatalf("[FIREBASE] Failed to initialize firebase client: %v", err)
+// // 	// }
+// // 	// fcmB2BPelapak := fcmCredB2BPelapak.MessagingClient
+
+// // 	//
+// // 	docs.SwaggerInfo.Host = cfg.Swagger.Host
+// // 	docs.SwaggerInfo.Schemes = cfg.Swagger.Schemes
+
+// // 	// Set logger used for jaeger
+// // 	logger, _ := zap.NewDevelopment(
+// // 		zap.AddStacktrace(zapcore.FatalLevel),
+// // 		zap.AddCallerSkip(1),
+// // 	)
+// // 	zapLogger := logger.With(zap.String("service", "goldgym"))
+// // 	zlogger := jaegerLog.NewFactory(zapLogger)
+// // 	// loggers := Log.NewLogrusLogger()
+// // 	// Set tracer for service
+// // 	tracer, closer := tracing.Init("goldgym", zlogger)
+// // 	defer closer.Close()
+
+// // 	httpc := httpclient.NewClient(tracer)
+// // 	ad := auth.New(httpc, cfg.API.Auth)
+
+// // 	// Diganti dengan domain yang anda buat
+// // 	sd := goldgymData.New(db, tracer, zlogger)
+// // 	ss := goldgymService.New(sd, ad, tracer, zlogger)
+// // 	sh := goldgymHandler.New(ss, tracer, zlogger)
+
+// // 	// sdpn := pushNotifData.New(fcmB2BPelapak, loggers)
+// // 	// sspn := pushNotifService.New(sdpn, t.Tracer, loggers)
+// // 	// spnh := pushNotifHandler.New(sspn, loggers)
+
+// // 	config.PrepareWatchPath()
+// // 	viper.WatchConfig()
+// // 	viper.OnConfigChange(func(e fsnotify.Event) {
+// // 		err := config.Init()
+// // 		if err != nil {
+// // 			log.Printf("[VIPER] Error get config file, %v", err)
+// // 		}
+// // 		cfg := config.Get()
+// // 		masterNew, err := openDatabases(cfg)
+// // 		if err != nil {
+// // 			log.Fatalf("[DB] Failed to initialize database connection: %v", err)
+// // 		} else {
+// // 			*db = *masterNew
+// //
+// // 		}
+
+// // 	})
+// // 	s := goldgymServer.Server{
+// // 		Goldgym: sh,
+// // 		// PushNotification: spnh,
+// // 	}
+
+// // 	if err := s.Serve(cfg.Server.Port); err != http.ErrServerClosed {
+// // 		return err
+// // 	}
+
+// // 	return nil
+// // }
+
+// // package boot
+
+// // import (
+// 	// "context"
+// 	// "core-be/docs"
+// 	// log "core-be/pkg/clog"
+// 	// "core-be/pkg/httpclient"
+// 	// "net/http"
+
+// 	// "core-be/internal/config"
+
+// 	// authDatav2 "core-be/internal/data/auth/v2"
+// 	// authHandlerv2 "core-be/internal/delivery/http/auth/v2"
+// 	// authServicev2 "core-be/internal/service/auth/v2"
+
+// 	// coreDatav1 "core-be/internal/data/core/v1"
+// 	// coreHandlerv1 "core-be/internal/delivery/http/core/v1"
+// 	// coreServicev1 "core-be/internal/service/core/v1"
+
+// 	// chatWAData "core-be/internal/data/chat-wa"
+
+// 	// httpServer "core-be/internal/delivery/http"
+
+// 	// "github.com/casbin/casbin/v2"
+// 	// "github.com/fsnotify/fsnotify"
+// 	// "github.com/jmoiron/sqlx"
+// 	// sqladapter "github.com/Blank-Xu/sqlx-adapter"
+// 	// "github.com/spf13/viper"
+// 	// "github.com/uptrace/opentelemetry-go-extra/otelsql"
+// 	// "github.com/uptrace/opentelemetry-go-extra/otelsqlx"
+// 	// semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+
+// 	// logger "core-be/pkg/log"
+// 	// "gold-gym-be/pkg/trace"
+// // )
+
+// // HTTP will load configuration, do dependency injection and then start the HTTP server
+// func HTTP() error {
+// 	var (
+// 		ctx = context.Background()
+// 	)
+
+// 	err := config.Init()
+// 	if err != nil {
+// 		log.Fatalf("[CONFIG] Failed to initialize config: %v", err)
+// 	}
+// 	cfg := config.Get()
+
+// 	t, err := trace.New(ctx, cfg.Trace.Exporter)
+// 	if err != nil {
+// 		log.Fatalf("[CONFIG] Failed to initialize tracer: %v", err)
+// 	}
+// 	defer t.Shutdown(ctx)
+
+// 	logger := logger.NewLogrusLogger()
+
+// 	httpc := httpclient.NewClient(
+// 		httpclient.WithTracer(t.Tracer),
+// 	)
+
+// 	coreDB, err := openConnectionPool("mysql", cfg.Database.Master)
+// 	if err != nil {
+// 		log.Fatalf("[atlasDB] Failed to open sql connection pool: %v", err)
+// 	}
+
+// 	casbinAdapter, err := sqladapter.NewAdapter(coreDB, "core_policy")
+// 	if err != nil {
+// 		log.Fatalf("[CASBIN] NewEnforcer failed to create new adapter: %v", err)
+// 	}
+
+// 	authEnforcer, err := casbin.NewEnforcer("auth_model.conf", casbinAdapter)
+// 	if err != nil {
+// 		log.Fatalf("[CASBIN] NewEnforcer failed to creates an enforcer: %v", err)
+// 	}
+// 	authEnforcer.AddFunction("coreMatch", authServicev2.KeyMatchFunc)
+
+// 	//
+// 	docs.SwaggerInfo.Host = cfg.Swagger.Host
+// 	docs.SwaggerInfo.Schemes = cfg.Swagger.Schemes
+
+// 	_authDatav2 := authDatav2.New(coreDB)
+// 	_coreDatav1 := coreDatav1.New(coreDB, authEnforcer)
+// 	_chatWA := chatWAData.New(httpc, cfg.API.ChatWA)
+
+// 	_coreServicev1 := coreServicev1.New(_coreDatav1, t.Tracer, logger)
+// 	_authServicev2 := authServicev2.New(_authDatav2, _coreServicev1, _chatWA, t.Tracer, logger, authEnforcer)
+
+// 	_authHandlerv2 := authHandlerv2.New(_authServicev2, logger)
+// 	_coreHandlerv1 := coreHandlerv1.New(_coreServicev1, logger)
+
+// 	config.PrepareWatchPath()
+// 	viper.OnConfigChange(func(e fsnotify.Event) {
+// 		err := config.Init()
+// 		if err != nil {
+// 			log.Printf("[VIPER] Error get config file, %v", err)
+// 		}
+// 		cfg := config.Get()
+
+// 		coreNew, err := openConnectionPool("mysql", cfg.Database.Master)
+// 		if err != nil {
+// 			log.Printf("[VIPER] Error open db connection, %v", err)
+// 		} else {
+// 			*coreDB = *coreNew
+// 			_coreDatav1.InitStmt()
+// 			_authDatav2.InitStmt()
+// 		}
+// 	})
+
+// 	s := httpServer.Server{
+// 		AuthV2:         _authHandlerv2,
+// 		CoreV1:         _coreHandlerv1,
+// 	}
+
+// 	if err := s.Serve(cfg.Server.Port); err != http.ErrServerClosed {
+// 		return err
+// 	}
+
+// 	return nil
+// }
+
+// func openConnectionPool(driver string, connString string) (db *gorm.DB, err error) {
+// 	db, err = otelsqlx.Open(
+// 		driver,
+// 		connString,
+// 		otelsql.WithDBSystem(semconv.DBSystemMySQL.Value.AsString()),
+// 	)
+// 	if err != nil {
+// 		return db, err
+// 	}
+
+// 	err = db.Ping()
+// 	if err != nil {
+// 		return db, err
+// 	}
+
+// 	return db, err
+// }

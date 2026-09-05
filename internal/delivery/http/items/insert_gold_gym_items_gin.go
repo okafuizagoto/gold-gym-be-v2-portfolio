@@ -4,8 +4,10 @@ import (
 	"fmt"
 	goldItemsEntity "gold-gym-be/internal/entity/items"
 	"gold-gym-be/pkg/response"
+	"io"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/opentracing/opentracing-go"
@@ -44,6 +46,44 @@ func (h *Handler) InsertGoldGymItemsGin(c *gin.Context) {
 		if err != nil {
 			log.Println("err", err)
 		}
+	case "uploadphoto":
+		// upload foto item (multipart: field "file", item_id lewat query/form)
+		itemID, _ := strconv.Atoi(c.Query("item_id"))
+		if itemID == 0 {
+			itemID, _ = strconv.Atoi(c.PostForm("item_id"))
+		}
+		fileHeader, errFile := c.FormFile("file")
+		if errFile != nil {
+			c.JSON(400, gin.H{"error": "file foto wajib diupload"})
+			return
+		}
+		if fileHeader.Size > goldItemsEntity.MaxItemPhotoBytes {
+			c.JSON(400, gin.H{"error": "ukuran foto maksimal 2 MB"})
+			return
+		}
+		f, errOpen := fileHeader.Open()
+		if errOpen != nil {
+			c.JSON(400, gin.H{"error": "file foto tidak bisa dibaca"})
+			return
+		}
+		defer f.Close()
+		content, errRead := io.ReadAll(io.LimitReader(f, goldItemsEntity.MaxItemPhotoBytes+1))
+		if errRead != nil {
+			c.JSON(400, gin.H{"error": "file foto tidak bisa dibaca"})
+			return
+		}
+		item, errSave := h.goldgymSvcItems.SaveItemPhoto(ctx, itemID,
+			fileHeader.Filename, fileHeader.Header.Get("Content-Type"), content,
+			c.GetInt("user"), c.GetString("role") == "ADMIN")
+		if errSave != nil {
+			c.JSON(400, gin.H{"error": errSave.Error()})
+			return
+		}
+		c.JSON(http.StatusCreated, gin.H{
+			"data":    item,
+			"message": "foto item tersimpan",
+		})
+		return
 	}
 
 	if err != nil {

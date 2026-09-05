@@ -71,7 +71,8 @@ func (h *Handler) InsertGoldGymSaleGin(c *gin.Context) {
 			uploadedBy = strconv.Itoa(c.GetInt("user"))
 		}
 		proof, errSave := h.goldgymSvcSale.SavePaymentProof(ctx, saleID,
-			fileHeader.Filename, fileHeader.Header.Get("Content-Type"), content, uploadedBy)
+			fileHeader.Filename, fileHeader.Header.Get("Content-Type"), content, uploadedBy,
+			c.GetInt("user"), c.GetString("role") == "ADMIN")
 		if errSave != nil {
 			c.JSON(400, gin.H{"error": errSave.Error()})
 			return
@@ -177,6 +178,20 @@ func (h *Handler) InsertGoldGymSaleGin(c *gin.Context) {
 			insertsale.InsertData.Header.SaleVoucherPercent = &percentStr
 			insertsale.InsertData.Header.SaleVoucherAmount = &amount
 		}
+		// Meja yang direservasi kasir (lihat modul meja) diterjemahkan jadi
+		// nama SEBELUM publish, supaya "No Meja" ikut tersimpan di baris
+		// th_sale yang sama saat consumer insert (lihat ThSale.SaleMejaNames).
+		// Gagal resolve tidak menggagalkan nota -- cukup NULL, ConfirmSaleMeja
+		// di bawah tetap jadi sumber cadangan (tabel sale_meja).
+		if len(insertsale.InsertData.MejaIDs) > 0 {
+			if names, errNames := h.goldgymSvcSale.GetMejaNamesByIDs(ctx,
+				insertsale.InsertData.Header.SaleOutcode, insertsale.InsertData.MejaIDs); errNames == nil && len(names) > 0 {
+				joined := strings.Join(names, ", ")
+				insertsale.InsertData.Header.SaleMejaNames = &joined
+			} else if errNames != nil {
+				h.logger.For(ctx).Error("failed to resolve meja names", zap.Error(errNames))
+			}
+		}
 		if err := h.kafkaProd.Publish(ctx, cfg.Kafka.Topics.Sales, "insert_sales", insertsale.InsertData); err != nil {
 			h.logger.For(ctx).Error("failed to publish to kafka", zap.Error(err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to queue request"})
@@ -194,6 +209,16 @@ func (h *Handler) InsertGoldGymSaleGin(c *gin.Context) {
 			if _, errMark := h.goldgymSvcSale.MarkBookingsPaid(ctx, insertsale.InsertData.BookingIDs, insertsale.InsertData.Header.SaleID); errMark != nil {
 				h.logger.For(ctx).Error("failed to mark bookings paid", zap.Error(errMark))
 				resp["booking_warning"] = "nota tersimpan tapi status booking gagal diperbarui, tandai lunas dari menu booking"
+			}
+		}
+		// meja yang direservasi kasir di picker POS (lihat modul meja)
+		// dicatat sinkron di sini, sama filosofi seperti blok booking di
+		// atas -- gagal simpan meja tidak menggagalkan nota, cuma warning.
+		if len(insertsale.InsertData.MejaIDs) > 0 {
+			if _, errMeja := h.goldgymSvcSale.ConfirmSaleMeja(ctx, insertsale.InsertData.MejaIDs,
+				insertsale.InsertData.Header.SaleOutcode, insertsale.InsertData.Header.SaleID); errMeja != nil {
+				h.logger.For(ctx).Error("failed to confirm sale meja", zap.Error(errMeja))
+				resp["meja_warning"] = "nota tersimpan tapi data meja gagal dicatat, catat manual di menu Kelola Meja"
 			}
 		}
 		c.JSON(http.StatusAccepted, resp)

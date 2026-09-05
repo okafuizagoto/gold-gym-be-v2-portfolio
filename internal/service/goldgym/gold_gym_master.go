@@ -386,6 +386,18 @@ func (s Service) LoginUser(ctx context.Context, _user, _password string, _host, 
 		buyerYN = "N"
 	}
 	metadata["buyer_yn"] = buyerYN
+	// flag ADMIN: paksa sembunyikan menu Daftar Pembeli / Mode Pembeli
+	// (default Y — tampil seperti biasa — kalau kolomnya kosong)
+	menuDaftarPembeli := user.GoldMenuDaftarPembeli
+	if menuDaftarPembeli == "" {
+		menuDaftarPembeli = "Y"
+	}
+	menuModePembeli := user.GoldMenuModePembeli
+	if menuModePembeli == "" {
+		menuModePembeli = "Y"
+	}
+	metadata["menu_daftar_pembeli"] = menuDaftarPembeli
+	metadata["menu_mode_pembeli"] = menuModePembeli
 	log.Println("metadata", metadata)
 	return token, metadata, refreshToken, err
 }
@@ -432,6 +444,19 @@ func (s Service) RegisterBuyer(ctx context.Context, req goldEntity.RegisterBuyer
 	}
 	if role != "BUYER" && role != "SELLER" {
 		return buyer, errors.New("role harus BUYER atau SELLER")
+	}
+
+	// Admin bisa membatasi pendaftaran mandiri lewat menu Akses Admin ->
+	// Daftar Akun (BOTH = perilaku default, boleh pilih salah satu).
+	registrationMode, err := s.goldgym.GetRegistrationMode(ctx)
+	if err != nil {
+		return buyer, errors.Wrap(err, "[SERVICE][RegisterBuyer][GetRegistrationMode]")
+	}
+	if registrationMode == "BUYER_ONLY" && role != "BUYER" {
+		return buyer, errors.New("saat ini pendaftaran hanya menerima akun pembeli")
+	}
+	if registrationMode == "SELLER_ONLY" && role != "SELLER" {
+		return buyer, errors.New("saat ini pendaftaran hanya menerima akun penjual")
 	}
 
 	existing, err := s.goldgym.GetGoldUserByEmail(ctx, req.GoldEmail)
@@ -725,6 +750,27 @@ func (s Service) SetToko(ctx context.Context, goldid int, toko string) (string, 
 		return "Gagal", errors.Wrap(err, "[Service][SetToko]")
 	}
 	return "Berhasil", nil
+}
+
+// ---- ADMIN: mode pendaftaran mandiri (menu Akses Admin -> Daftar Akun) ----
+
+func (s Service) GetRegistrationMode(ctx context.Context) (string, error) {
+	mode, err := s.goldgym.GetRegistrationMode(ctx)
+	if err != nil {
+		return "", errors.Wrap(err, "[Service][GetRegistrationMode]")
+	}
+	return mode, nil
+}
+
+func (s Service) SetRegistrationMode(ctx context.Context, mode string, updatedBy string) error {
+	mode = strings.ToUpper(strings.TrimSpace(mode))
+	if mode != "BOTH" && mode != "BUYER_ONLY" && mode != "SELLER_ONLY" {
+		return errors.New("mode harus salah satu dari BOTH, BUYER_ONLY, atau SELLER_ONLY")
+	}
+	if err := s.goldgym.SetRegistrationMode(ctx, mode, updatedBy); err != nil {
+		return errors.Wrap(err, "[Service][SetRegistrationMode]")
+	}
+	return nil
 }
 
 func (s Service) UpdateNama(ctx context.Context, subs goldEntity.UpdateNama) (string, error) {

@@ -24,6 +24,7 @@ type GoldGymHandler interface {
 	UpdateGoldGymGin(c *gin.Context)
 	UpdateGoldGymTokoGin(c *gin.Context)
 	UpdateGoldGymBuyerGin(c *gin.Context)
+	UpdateRegistrationModeGin(c *gin.Context)
 
 	// PrintSelisih(w http.ResponseWriter, r *http.Request)
 	// PrintExpiredTerpajang(w http.ResponseWriter, r *http.Request)
@@ -61,11 +62,27 @@ type GoldGymDiscountHandler interface {
 	DeleteGoldGymDiscountGin(c *gin.Context)
 }
 
+type GoldGymStorageHandler interface {
+	GetGoldGymStorageGin(c *gin.Context)
+	DeleteGoldGymStorageGin(c *gin.Context)
+}
+
 type GoldGymOutletHandler interface {
 	GetGoldGymOutletGin(c *gin.Context)
 	InsertGoldGymOutletGin(c *gin.Context)
 	UpdateGoldGymOutletGin(c *gin.Context)
 	DeleteGoldGymOutletGin(c *gin.Context)
+}
+
+type GoldGymAreaHandler interface {
+	GetGoldGymAreaGin(c *gin.Context)
+	InsertGoldGymAreaGin(c *gin.Context)
+}
+
+type GoldGymMejaHandler interface {
+	GetGoldGymMejaGin(c *gin.Context)
+	InsertGoldGymMejaGin(c *gin.Context)
+	UpdateGoldGymMejaGin(c *gin.Context)
 }
 
 type GoldGymCustomerHandler interface {
@@ -103,6 +120,12 @@ type GoldGymOrderHandler interface {
 	InsertGoldGymOrderGin(c *gin.Context)
 	UpdateGoldGymOrderGin(c *gin.Context)
 	DeleteGoldGymOrderGin(c *gin.Context)
+}
+
+// GoldGymSellerAccessHandler ...
+type GoldGymSellerAccessHandler interface {
+	GetGoldGymSellerAccessGin(c *gin.Context)
+	UpdateGoldGymSellerAccessGin(c *gin.Context)
 }
 
 // AuthHandler ...
@@ -151,12 +174,16 @@ type Server struct {
 	GoldgymStock        GoldGymStockHandler
 	GoldgymItems        GoldGymItemsHandler
 	GoldgymDiscount     GoldGymDiscountHandler
+	GoldgymStorage      GoldGymStorageHandler
 	GoldgymOutlet       GoldGymOutletHandler
+	GoldgymArea         GoldGymAreaHandler
+	GoldgymMeja         GoldGymMejaHandler
 	GoldgymCustomer     GoldGymCustomerHandler
 	GoldgymCustomerType GoldGymCustomerTypeHandler
 	GoldgymSale         GoldGymSaleHandler
 	GoldgymBooking      GoldGymBookingHandler
 	GoldgymOrder        GoldGymOrderHandler
+	GoldgymSellerAccess GoldGymSellerAccessHandler
 	Auth                AuthHandler
 	Middleware          MiddlewareHandler
 	// mongodb

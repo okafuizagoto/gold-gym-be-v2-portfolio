@@ -3,6 +3,7 @@ package goldgym
 import (
 	"context"
 	"fmt"
+	goldQuotaEntity "gold-gym-be/internal/entity/quota"
 	goldSaleEntity "gold-gym-be/internal/entity/sales"
 	goldStockEntity "gold-gym-be/internal/entity/stock"
 	"os"
@@ -44,12 +45,23 @@ func proofStorageDir() string {
 	return "/root/storages/photos"
 }
 
+// proofBytesToKB pembulatan ke ATAS ke KB terdekat -- dipakai konsisten di
+// semua operasi kuota (naik saat upload, turun saat hapus) supaya tidak drift.
+func proofBytesToKB(b int64) int {
+	if b <= 0 {
+		return 0
+	}
+	return int((b + 1023) / 1024)
+}
+
 // SavePaymentProof menyimpan foto bukti pembayaran transfer bank:
 //   - ukuran per file maksimal 5 MB, hanya file gambar
 //   - kuota global SUM(proof_bytes) maksimal 10 GB — jika penuh, upload ditolak
 //     dengan pesan "tolong hubungi admin"
+//   - kuota per-user 30MB (gabung dgn foto item) — berlaku utk semua role
+//     KECUALI admin (isAdmin=true melewati pengecekan & tidak menambah counter)
 //   - file fisik ditulis ke proofStorageDir(), metadata ke tabel payment_proof
-func (s Service) SavePaymentProof(ctx context.Context, saleID string, originalName string, mimeType string, content []byte, uploadedBy string) (goldSaleEntity.PaymentProof, error) {
+func (s Service) SavePaymentProof(ctx context.Context, saleID string, originalName string, mimeType string, content []byte, uploadedBy string, goldID int, isAdmin bool) (goldSaleEntity.PaymentProof, error) {
 	var proof goldSaleEntity.PaymentProof
 
 	if saleID == "" {
@@ -74,6 +86,18 @@ func (s Service) SavePaymentProof(ctx context.Context, saleID string, originalNa
 		return proof, errors.New("penyimpanan bukti pembayaran penuh — tolong hubungi admin")
 	}
 
+	// validasi kuota per-user 30MB (gabung dgn foto item)
+	deltaKB := proofBytesToKB(int64(len(content)))
+	if !isAdmin {
+		usedKB, errQuota := s.goldgymsale.GetUserStorageUsedKB(ctx, goldID)
+		if errQuota != nil {
+			return proof, errors.Wrap(errQuota, "[Service][SavePaymentProof][GetUserStorageUsedKB]")
+		}
+		if usedKB+deltaKB > goldQuotaEntity.MaxUserStorageKB {
+			return proof, errors.New("Kapasitas penyimpanan foto Anda sudah penuh (30 MB). Hapus beberapa foto di menu Storage sebelum mengunggah yang baru.")
+		}
+	}
+
 	dir := proofStorageDir()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return proof, errors.Wrap(err, "[Service][SavePaymentProof][MkdirAll]")
@@ -95,6 +119,7 @@ func (s Service) SavePaymentProof(ctx context.Context, saleID string, originalNa
 		ProofBytes:        int64(len(content)),
 		ProofPath:         dir,
 		ProofUploadedBy:   uploadedBy,
+		ProofGoldID:       goldID,
 	}
 	saved, err := s.goldgymsale.InsertPaymentProof(ctx, proof)
 	if err != nil {
@@ -102,7 +127,43 @@ func (s Service) SavePaymentProof(ctx context.Context, saleID string, originalNa
 		_ = os.Remove(filepath.Join(dir, filename))
 		return proof, errors.Wrap(err, "[Service][SavePaymentProof][InsertPaymentProof]")
 	}
+	if !isAdmin && deltaKB > 0 {
+		_ = s.goldgymsale.AddUserStorageUsedKB(ctx, goldID, deltaKB)
+	}
 	return saved, nil
+}
+
+// DeletePaymentProofPhoto menghapus bukti pembayaran (aksi hapus di menu
+// Storage): verifikasi kepemilikan, hapus row+file fisik, kembalikan kuota,
+// catat history.
+func (s Service) DeletePaymentProofPhoto(ctx context.Context, proofID int, goldID int, deletedBy string) error {
+	proof, err := s.goldgymsale.GetPaymentProofByID(ctx, proofID)
+	if err != nil {
+		return errors.Wrap(err, "[Service][DeletePaymentProofPhoto][GetPaymentProofByID]")
+	}
+	if proof == nil {
+		return errors.New("bukti pembayaran tidak ditemukan")
+	}
+	if proof.ProofGoldID != goldID {
+		return errors.New("bukti pembayaran bukan milik Anda")
+	}
+	if err := s.goldgymsale.DeletePaymentProof(ctx, proofID); err != nil {
+		return errors.Wrap(err, "[Service][DeletePaymentProofPhoto][DeletePaymentProof]")
+	}
+	_ = os.Remove(filepath.Join(proof.ProofPath, proof.ProofFilename))
+	if deltaKB := proofBytesToKB(proof.ProofBytes); deltaKB > 0 {
+		_ = s.goldgymsale.AddUserStorageUsedKB(ctx, goldID, -deltaKB)
+	}
+	_ = s.goldgymsale.InsertStorageDeleteHistory(ctx, goldQuotaEntity.StorageDeleteHistory{
+		GoldID:           goldID,
+		SourceType:       goldQuotaEntity.SourceTypePaymentProof,
+		SourceID:         proofID,
+		OriginalFilename: proof.ProofFilename,
+		FileBytes:        int(proof.ProofBytes),
+		ContextLabel:     proof.ProofSaleID,
+		DeletedBy:        deletedBy,
+	})
+	return nil
 }
 
 // GetPaymentProofs daftar bukti pembayaran milik satu nota (untuk Sales History).
@@ -149,6 +210,29 @@ func (s Service) MarkBookingsPaid(ctx context.Context, bookingIDs []string, sale
 		return 0, errors.Wrap(err, "[Service][MarkBookingsPaid]")
 	}
 	return affected, nil
+}
+
+// ConfirmSaleMeja mencatat snapshot meja yang dipakai nota ini ke
+// sale_meja, supaya bisa dicetak di nota (lihat GetSaleMejaNames).
+func (s Service) ConfirmSaleMeja(ctx context.Context, mejaIDs []int, outcode, saleID string) (int64, error) {
+	if len(mejaIDs) == 0 || saleID == "" {
+		return 0, nil
+	}
+	affected, err := s.goldgymsale.ConfirmSaleMeja(ctx, mejaIDs, outcode, saleID)
+	if err != nil {
+		return 0, errors.Wrap(err, "[Service][ConfirmSaleMeja]")
+	}
+	return affected, nil
+}
+
+// GetMejaNamesByIDs menerjemahkan meja_ids jadi nama meja -- dipakai
+// handler mengisi ThSale.SaleMejaNames sebelum publish ke Kafka.
+func (s Service) GetMejaNamesByIDs(ctx context.Context, outcode string, mejaIDs []int) ([]string, error) {
+	names, err := s.goldgymsale.GetMejaNamesByIDs(ctx, outcode, mejaIDs)
+	if err != nil {
+		return nil, errors.Wrap(err, "[Service][GetMejaNamesByIDs]")
+	}
+	return names, nil
 }
 
 func (s Service) InsertSales(ctx context.Context, goldid int, sales goldSaleEntity.InsertSales) (string, error) {
@@ -321,6 +405,8 @@ func (s Service) InsertSales(ctx context.Context, goldid int, sales goldSaleEnti
 		SaleVoucherCode:          sales.Header.SaleVoucherCode,
 		SaleVoucherPercent:       voucherPercent,
 		SaleVoucherAmount:        voucherAmount,
+		SalePayType:              sales.Header.SalePayType,
+		SaleMejaNames:            sales.Header.SaleMejaNames,
 	}
 	headerArr = append(headerArr, header)
 

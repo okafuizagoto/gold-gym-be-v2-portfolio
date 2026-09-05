@@ -6,13 +6,30 @@ import (
 	"gold-gym-be/pkg/response"
 	"log"
 	"net/http"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
 	"go.uber.org/zap"
 )
+
+// itemPhotoMime menentukan Content-Type dari ekstensi nama file -- item_photo
+// cuma menyimpan nama file, tidak ada kolom mime terpisah (beda dari payment_proof).
+func itemPhotoMime(filename string) string {
+	switch strings.ToLower(filepath.Ext(filename)) {
+	case ".png":
+		return "image/png"
+	case ".webp":
+		return "image/webp"
+	case ".gif":
+		return "image/gif"
+	default:
+		return "image/jpeg"
+	}
+}
 
 func (h *Handler) GetGoldGymItemsGin(c *gin.Context) {
 	var (
@@ -42,6 +59,17 @@ func (h *Handler) GetGoldGymItemsGin(c *gin.Context) {
 		limit, _ := strconv.Atoi(c.Query("page"))
 		offset, _ := strconv.Atoi(c.Query("length"))
 		result, metadata, err = h.goldgymSvcItems.GetItems(ctx, userID, c.Query("name"), c.Query("code"), limit, offset)
+	case "itemphoto":
+		// unduh/tampilkan file foto item
+		itemID, _ := strconv.Atoi(c.Query("id"))
+		filename, content, errPhoto := h.goldgymSvcItems.GetItemPhotoFile(ctx, itemID)
+		if errPhoto != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": errPhoto.Error()})
+			return
+		}
+		c.Header("Content-Disposition", `inline; filename="`+filename+`"`)
+		c.Data(http.StatusOK, itemPhotoMime(filename), content)
+		return
 	}
 
 	if err != nil {

@@ -144,6 +144,7 @@ func (s *Server) Handler() *gin.Engine {
 		goldgym.PUT("", s.Middleware.SensitiveUserActionRateLimit, s.Goldgym.UpdateGoldGymGin)                                                                    // PUT
 		goldgym.PUT("/toko", s.Middleware.ValidateToken, s.Goldgym.UpdateGoldGymTokoGin)                                                                          // PUT nama toko sendiri
 		goldgym.PUT("/buyer", s.Middleware.ValidateToken, s.Goldgym.UpdateGoldGymBuyerGin)                                                                        // PUT daftar sebagai pembeli (flag)
+		goldgym.PUT("/registrationmode", s.Middleware.ValidateToken, s.Goldgym.UpdateRegistrationModeGin)                                                         // PUT mode pendaftaran mandiri (ADMIN)
 		goldgym.DELETE("", s.Middleware.SensitiveUserActionRateLimit, s.Goldgym.DeleteGoldGymGin)                                                                 // DELETE
 
 		// Auth routes
@@ -183,9 +184,14 @@ func (s *Server) Handler() *gin.Engine {
 		goldgymDiscount.POST("", s.Middleware.ValidateToken, s.Middleware.CheckUniqueRequest, s.GoldgymDiscount.InsertGoldGymDiscountGin) // POST
 		goldgymDiscount.PUT("", s.Middleware.ValidateToken, s.GoldgymDiscount.UpdateGoldGymDiscountGin)                                   // PUT
 		goldgymDiscount.DELETE("", s.Middleware.ValidateToken, s.GoldgymDiscount.DeleteGoldGymDiscountGin)                                // DELETE
+	}
 
-		// // Auth routes
-		// goldgym.POST("/login", s.Auth.LoginUser) // POST
+	// Menu Storage -- daftar & hapus foto (item + bukti pembayaran) milik
+	// user yang login. Semua role KECUALI ADMIN (ditolak di handler).
+	goldgymStorage := router.Group("/v2/storage")
+	{
+		goldgymStorage.GET("", s.Middleware.ValidateToken, s.GoldgymStorage.GetGoldGymStorageGin)       // GET
+		goldgymStorage.DELETE("", s.Middleware.ValidateToken, s.GoldgymStorage.DeleteGoldGymStorageGin) // DELETE
 	}
 	goldgymOutlet := router.Group("/v2/outlet")
 	{
@@ -197,6 +203,19 @@ func (s *Server) Handler() *gin.Engine {
 
 		// // Auth routes
 		// goldgym.POST("/login", s.Auth.LoginUser) // POST
+	}
+
+	goldgymArea := router.Group("/v2/area")
+	{
+		goldgymArea.GET("", s.Middleware.ValidateToken, s.GoldgymArea.GetGoldGymAreaGin)                                      // GET
+		goldgymArea.POST("", s.Middleware.ValidateToken, s.Middleware.CheckUniqueRequest, s.GoldgymArea.InsertGoldGymAreaGin) // POST
+	}
+
+	goldgymMeja := router.Group("/v2/meja")
+	{
+		goldgymMeja.GET("", s.Middleware.ValidateToken, s.GoldgymMeja.GetGoldGymMejaGin)                                      // GET
+		goldgymMeja.POST("", s.Middleware.ValidateToken, s.Middleware.CheckUniqueRequest, s.GoldgymMeja.InsertGoldGymMejaGin) // POST
+		goldgymMeja.PUT("", s.Middleware.ValidateToken, s.GoldgymMeja.UpdateGoldGymMejaGin)                                   // PUT: reservemeja / releasemeja
 	}
 
 	goldgymCustomer := router.Group("/v2/cust")
@@ -236,6 +255,12 @@ func (s *Server) Handler() *gin.Engine {
 		goldgymOrder.POST("", s.Middleware.ValidateToken, s.Middleware.CheckUniqueRequest, s.GoldgymOrder.InsertGoldGymOrderGin) // POST: insertorder
 		goldgymOrder.PUT("", s.Middleware.ValidateToken, s.GoldgymOrder.UpdateGoldGymOrderGin)                                   // PUT: confirm/reject/finish
 		goldgymOrder.DELETE("", s.Middleware.ValidateToken, s.GoldgymOrder.DeleteGoldGymOrderGin)                                // DELETE: removevisible (ADMIN)
+	}
+	goldgymSellerAccess := router.Group("/v2/selleraccess")
+	{
+		// ADMIN: aktif/nonaktifkan menu Daftar Pembeli & Mode Pembeli milik penjual.
+		goldgymSellerAccess.GET("", s.Middleware.ValidateToken, s.GoldgymSellerAccess.GetGoldGymSellerAccessGin)    // GET: list
+		goldgymSellerAccess.PUT("", s.Middleware.ValidateToken, s.GoldgymSellerAccess.UpdateGoldGymSellerAccessGin) // PUT: daftarpembeli/modepembeli
 	}
 	goldgymSale := router.Group("/v2/sales")
 	{

@@ -56,7 +56,12 @@ type GetGoldUserss struct {
 	GoldRole                string      `gorm:"column:gold_role" db:"gold_role" json:"gold_role"`
 	// GoldBuyerYN flag "sudah mendaftar sebagai pembeli" (menu Mode Pembeli)
 	GoldBuyerYN string `gorm:"column:gold_buyer_yn" db:"gold_buyer_yn" json:"gold_buyer_yn"`
-	GoldStatus  string `gorm:"column:gold_status" db:"gold_status" json:"gold_status"`
+	// GoldMenuDaftarPembeli/GoldMenuModePembeli: flag ADMIN untuk paksa
+	// sembunyikan menu "Daftar Pembeli"/"Mode Pembeli" dari penjual, terlepas
+	// dari status gold_buyer_yn miliknya sendiri (lihat modul selleraccess).
+	GoldMenuDaftarPembeli string `gorm:"column:gold_menu_daftar_pembeli" db:"gold_menu_daftar_pembeli" json:"gold_menu_daftar_pembeli"`
+	GoldMenuModePembeli   string `gorm:"column:gold_menu_mode_pembeli" db:"gold_menu_mode_pembeli" json:"gold_menu_mode_pembeli"`
+	GoldStatus            string `gorm:"column:gold_status" db:"gold_status" json:"gold_status"`
 }
 
 type LoginUser struct {

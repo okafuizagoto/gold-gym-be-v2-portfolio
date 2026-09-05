@@ -58,6 +58,9 @@ type RepoData interface {
 
 	InsertBuyer(ctx context.Context, buyer goldEntity.BuyerRow) (goldEntity.BuyerRow, error)
 	CountGoldUsers(ctx context.Context) (int64, error)
+
+	GetRegistrationMode(ctx context.Context) (string, error)
+	SetRegistrationMode(ctx context.Context, mode string, updatedBy string) error
 }
 
 type RedisData interface {

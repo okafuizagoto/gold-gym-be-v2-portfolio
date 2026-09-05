@@ -397,4 +397,3 @@ func (s Service) GetStock(ctx context.Context, goldid int, name string, outcode 
 	}
 	return items, metadataDetail, err
 }
-

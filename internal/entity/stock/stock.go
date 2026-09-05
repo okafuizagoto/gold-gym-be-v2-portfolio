@@ -18,6 +18,8 @@ type GetOneStock struct {
 	StockPrice int `gorm:"column:stock_price;->" db:"stock_price" json:"stock_price"`
 	// merek diambil dari items.item_brand via join; brand THERAPY = jasa, stok tak dibatasi
 	StockBrand string `gorm:"column:stock_brand;->" db:"stock_brand" json:"stock_brand"`
+	// nama file foto diambil dari items.item_photo via join (untuk kartu katalog POS)
+	StockPhoto string `gorm:"column:stock_photo;->" db:"stock_photo" json:"stock_photo"`
 }
 
 type InsertStock struct {

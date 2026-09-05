@@ -1152,7 +1152,7 @@ func (d *Data) GetStock(ctx context.Context, goldid int, name string, outcode st
 	// join items agar response stok membawa harga jual (stock_price)
 	query := d.db.WithContext(ctx).
 		Model(&goldStockEntity.GetOneStock{}).
-		Select("stock.*, COALESCE(items.item_price, 0) AS stock_price, COALESCE(items.item_brand, '') AS stock_brand").
+		Select("stock.*, COALESCE(items.item_price, 0) AS stock_price, COALESCE(items.item_brand, '') AS stock_brand, COALESCE(items.item_photo, '') AS stock_photo").
 		Joins("LEFT JOIN items ON items.item_id = stock.stock_item_id").
 		Where("stock_gold_id = ? AND stock_outcode = ?", goldid, outcode)
 

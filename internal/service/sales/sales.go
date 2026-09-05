@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"gold-gym-be/internal/entity"
+	goldQuotaEntity "gold-gym-be/internal/entity/quota"
 	goldSaleEntity "gold-gym-be/internal/entity/sales"
 	jaegerLog "gold-gym-be/pkg/log"
 
@@ -33,10 +34,16 @@ type Data interface {
 	GetPosOutletsForAdmin(ctx context.Context, search string) ([]goldSaleEntity.PosOutlet, error)
 	SetPosCustomerOptional(ctx context.Context, goldid int, outcode string, optional bool, addedBy string) error
 	MarkBookingsPaid(ctx context.Context, bookingIDs []string, saleID string) (int64, error)
+	ConfirmSaleMeja(ctx context.Context, mejaIDs []int, outcode, saleID string) (int64, error)
+	GetMejaNamesByIDs(ctx context.Context, outcode string, mejaIDs []int) ([]string, error)
 	GetTotalProofBytes(ctx context.Context) (int64, error)
 	InsertPaymentProof(ctx context.Context, proof goldSaleEntity.PaymentProof) (goldSaleEntity.PaymentProof, error)
 	GetPaymentProofsBySale(ctx context.Context, saleID string) ([]goldSaleEntity.PaymentProof, error)
 	GetPaymentProofByID(ctx context.Context, proofID int) (*goldSaleEntity.PaymentProof, error)
+	DeletePaymentProof(ctx context.Context, proofID int) error
+	GetUserStorageUsedKB(ctx context.Context, goldID int) (int, error)
+	AddUserStorageUsedKB(ctx context.Context, goldID int, deltaKB int) error
+	InsertStorageDeleteHistory(ctx context.Context, h goldQuotaEntity.StorageDeleteHistory) error
 	GetSaleReportItems(ctx context.Context, goldid int, outcode, date string) ([]goldSaleEntity.SaleReportItem, error)
 	GetSaleDailyTotals(ctx context.Context, goldid int, outcode, start, end string) ([]goldSaleEntity.SaleDailyTotal, error)
 

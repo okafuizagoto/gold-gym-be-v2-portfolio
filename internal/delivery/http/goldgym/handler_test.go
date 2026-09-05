@@ -111,6 +111,14 @@ func (m *mockService) GetTestingImage(ctx context.Context, id int) ([]byte, erro
 	return []byte{}, m.err
 }
 
+func (m *mockService) GetRegistrationMode(ctx context.Context) (string, error) {
+	return "BOTH", m.err
+}
+
+func (m *mockService) SetRegistrationMode(ctx context.Context, mode string, updatedBy string) error {
+	return m.err
+}
+
 func setupRouter(h *Handler) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()

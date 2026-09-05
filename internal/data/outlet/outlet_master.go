@@ -280,8 +280,29 @@ func (d *Data) UpdateOutlet(ctx context.Context, updateoutlet goldOutletEntity.U
 }
 
 func (d *Data) DeleteOutlet(ctx context.Context, goldid int, code string) error {
-	return d.db.WithContext(ctx).Debug().Where("outlet_gold_id = ? AND outlet_code = ?", goldid, code).Delete(&goldOutletEntity.Outlet{}).Error
+	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var outlet goldOutletEntity.Outlet
+		if err := tx.Debug().Where("outlet_gold_id = ? AND outlet_code = ?", goldid, code).First(&outlet).Error; err != nil {
+			return err
+		}
 
+		history := goldOutletEntity.OutletDeleteHistory{
+			OutletGoldID:    outlet.OutletGoldID,
+			OutletID:        outlet.OutletID,
+			OutletCode:      outlet.OutletCode,
+			OutletName:      outlet.OutletName,
+			OutletType:      outlet.OutletType,
+			OutletAddress:   outlet.OutletAddress,
+			OutletStatus:    outlet.OutletStatus,
+			OutletCreatedAt: &outlet.OutletCreatedAt,
+			DeletedBy:       goldid,
+		}
+		if err := tx.Debug().Create(&history).Error; err != nil {
+			return err
+		}
+
+		return tx.Debug().Where("outlet_gold_id = ? AND outlet_code = ?", goldid, code).Delete(&goldOutletEntity.Outlet{}).Error
+	})
 }
 
 func (d *Data) GetOutlet(ctx context.Context, goldid int, name, status string, page, length int) ([]goldOutletEntity.Outlet, error) {

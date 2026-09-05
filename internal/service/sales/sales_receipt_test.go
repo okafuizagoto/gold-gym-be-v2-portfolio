@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	goldQuotaEntity "gold-gym-be/internal/entity/quota"
 	goldSaleEntity "gold-gym-be/internal/entity/sales"
 	jaegerLog "gold-gym-be/pkg/log"
 
@@ -88,6 +89,14 @@ func (fakeSalesData) GetSaleCustomerToko(ctx context.Context, custid int) (strin
 	return "", nil
 }
 
+func (fakeSalesData) ConfirmSaleMeja(ctx context.Context, mejaIDs []int, outcode, saleID string) (int64, error) {
+	return int64(len(mejaIDs)), nil
+}
+
+func (fakeSalesData) GetMejaNamesByIDs(ctx context.Context, outcode string, mejaIDs []int) ([]string, error) {
+	return nil, nil
+}
+
 func (fakeSalesData) IsPosCustomerOptional(ctx context.Context, goldid int, outcode string) (bool, error) {
 	return false, nil
 }
@@ -122,6 +131,18 @@ func (fakeSalesData) GetPaymentProofsBySale(ctx context.Context, saleID string) 
 
 func (fakeSalesData) GetPaymentProofByID(ctx context.Context, proofID int) (*goldSaleEntity.PaymentProof, error) {
 	return nil, nil
+}
+func (fakeSalesData) DeletePaymentProof(ctx context.Context, proofID int) error {
+	return nil
+}
+func (fakeSalesData) GetUserStorageUsedKB(ctx context.Context, goldID int) (int, error) {
+	return 0, nil
+}
+func (fakeSalesData) AddUserStorageUsedKB(ctx context.Context, goldID int, deltaKB int) error {
+	return nil
+}
+func (fakeSalesData) InsertStorageDeleteHistory(ctx context.Context, h goldQuotaEntity.StorageDeleteHistory) error {
+	return nil
 }
 
 func (fakeSalesData) GetSaleReportItems(ctx context.Context, goldid int, outcode, date string) ([]goldSaleEntity.SaleReportItem, error) {

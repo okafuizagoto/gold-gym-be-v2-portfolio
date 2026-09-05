@@ -62,6 +62,16 @@ func (h *Handler) GetGoldGymGin(c *gin.Context) {
 	case "getgoldgym":
 		result, err = h.goldgymSvc.GetGoldUser(ctx)
 		log.Println("deliverygolduser", result)
+	case "getregistrationmode":
+		// publik (dipanggil layar Register sebelum login) — mode saat ini
+		// untuk pendaftaran mandiri: BOTH / BUYER_ONLY / SELLER_ONLY.
+		mode, modeErr := h.goldgymSvc.GetRegistrationMode(ctx)
+		if modeErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": modeErr.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"data": gin.H{"mode": mode}})
+		return
 	case "golduserbyemail":
 		result, err = h.goldgymSvc.GetGoldUserByEmail(ctx, c.Query("email"))
 	case "allsubscription":

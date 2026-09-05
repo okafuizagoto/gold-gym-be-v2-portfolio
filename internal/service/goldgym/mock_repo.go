@@ -50,6 +50,8 @@ type mockRepo struct {
 	GetTestingImagesFn                func(ctx context.Context, id int) ([]byte, error)
 	GetGoldUserByIDFn                 func(ctx context.Context, id string) (goldEntity.GetGoldUserss, error)
 	CountGoldUsersFn                  func(ctx context.Context) (int64, error)
+	GetRegistrationModeFn             func(ctx context.Context) (string, error)
+	SetRegistrationModeFn             func(ctx context.Context, mode string, updatedBy string) error
 }
 
 func (m *mockRepo) GetGoldUser(ctx context.Context) ([]goldEntity.GetGoldUser, error) {
@@ -293,4 +295,18 @@ func (m *mockRepo) CountGoldUsers(ctx context.Context) (int64, error) {
 		return m.CountGoldUsersFn(ctx)
 	}
 	return 0, nil
+}
+
+func (m *mockRepo) GetRegistrationMode(ctx context.Context) (string, error) {
+	if m.GetRegistrationModeFn != nil {
+		return m.GetRegistrationModeFn(ctx)
+	}
+	return "BOTH", nil
+}
+
+func (m *mockRepo) SetRegistrationMode(ctx context.Context, mode string, updatedBy string) error {
+	if m.SetRegistrationModeFn != nil {
+		return m.SetRegistrationModeFn(ctx, mode, updatedBy)
+	}
+	return nil
 }

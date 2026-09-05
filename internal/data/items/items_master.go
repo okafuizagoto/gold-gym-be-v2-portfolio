@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	goldItemsEntity "gold-gym-be/internal/entity/items"
+	goldQuotaEntity "gold-gym-be/internal/entity/quota"
 	"strings"
 	"time"
 
@@ -123,10 +124,12 @@ func (d *Data) InsertItems(ctx context.Context, tx *gorm.DB, id int, items []gol
 	}
 
 	if len(items) == 1 {
-		err = tx.WithContext(ctx).Create(items[0]).Error
+		// pointer wajib supaya GORM menulis balik item_id auto-increment ke
+		// items[0] (dipakai InsertItems service untuk upload foto sesudahnya)
+		err = tx.WithContext(ctx).Create(&items[0]).Error
 	}
 	if len(items) > 1 && len(items) <= 350 {
-		err = tx.WithContext(ctx).CreateInBatches(items, 350).Error
+		err = tx.WithContext(ctx).CreateInBatches(&items, 350).Error
 	}
 
 	if len(items) > 350 {
@@ -242,6 +245,58 @@ func (d *Data) GetItemGoldID(ctx context.Context, itemID int, outcode string) (i
 
 func (d *Data) DeleteItems(ctx context.Context, goldid, golditemid int, outcode string) error {
 	return d.db.WithContext(ctx).Debug().Where("item_gold_id = ? AND item_outcode = ? AND item_id = ?", goldid, outcode, golditemid).Delete(&goldItemsEntity.UpdateItems{}).Error
+}
+
+// GetItemByID mengembalikan satu baris item lengkap (dipakai upload/serving foto:
+// cek item ada, ambil nama file foto lama untuk dihapus, ambil nama file untuk serve).
+func (d *Data) GetItemByID(ctx context.Context, itemID int) (goldItemsEntity.Item, error) {
+	var item goldItemsEntity.Item
+	err := d.db.WithContext(ctx).Where("item_id = ?", itemID).First(&item).Error
+	if err != nil {
+		return item, errors.Wrap(err, "[DATA][GetItemByID]")
+	}
+	return item, nil
+}
+
+// UpdateItemPhoto menyimpan nama file + ukuran foto item yang baru diupload.
+func (d *Data) UpdateItemPhoto(ctx context.Context, itemID int, filename string, bytes int) error {
+	return d.db.WithContext(ctx).Model(&goldItemsEntity.Item{}).
+		Where("item_id = ?", itemID).
+		Updates(map[string]interface{}{"item_photo": filename, "item_photo_bytes": bytes}).Error
+}
+
+// ClearItemPhoto mengosongkan referensi foto item (dipanggil saat user hapus
+// foto lewat menu Storage) -- file fisiknya dihapus terpisah oleh service.
+func (d *Data) ClearItemPhoto(ctx context.Context, itemID int) error {
+	return d.db.WithContext(ctx).Model(&goldItemsEntity.Item{}).
+		Where("item_id = ?", itemID).
+		Updates(map[string]interface{}{"item_photo": nil, "item_photo_bytes": nil}).Error
+}
+
+// GetUserStorageUsedKB kuota storage foto yang sudah terpakai satu user (KB).
+func (d *Data) GetUserStorageUsedKB(ctx context.Context, goldID int) (int, error) {
+	var usedKB int
+	err := d.db.WithContext(ctx).Table("data_peserta").
+		Select("gold_storage_used_kb").Where("gold_id = ?", goldID).
+		Scan(&usedKB).Error
+	if err != nil {
+		return 0, errors.Wrap(err, "[DATA][GetUserStorageUsedKB]")
+	}
+	return usedKB, nil
+}
+
+// AddUserStorageUsedKB menambah (atau mengurangi, deltaKB negatif) kuota
+// terpakai user -- tidak pernah turun di bawah 0.
+func (d *Data) AddUserStorageUsedKB(ctx context.Context, goldID int, deltaKB int) error {
+	return d.db.WithContext(ctx).Table("data_peserta").
+		Where("gold_id = ?", goldID).
+		Update("gold_storage_used_kb", gorm.Expr("GREATEST(0, gold_storage_used_kb + ?)", deltaKB)).Error
+}
+
+// InsertStorageDeleteHistory mencatat foto yang dihapus dari menu Storage --
+// audit saja, belum ada tampilan untuk tabel ini.
+func (d *Data) InsertStorageDeleteHistory(ctx context.Context, h goldQuotaEntity.StorageDeleteHistory) error {
+	return d.db.WithContext(ctx).Create(&h).Error
 }
 
 // EnsureTherapyStock membuat baris stock otomatis untuk item brand THERAPY yang belum

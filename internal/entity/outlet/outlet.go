@@ -59,6 +59,20 @@ type InsertOutletCounter struct {
 	CounterOutletName string `gorm:"column:counter_outlet_name" db:"counter_outlet_name" json:"counter_outlet_name"`
 }
 
+type OutletDeleteHistory struct {
+	HistoryID       int        `gorm:"column:history_id" db:"history_id" json:"history_id"`
+	OutletGoldID    int        `gorm:"column:outlet_gold_id" db:"outlet_gold_id" json:"outlet_gold_id"`
+	OutletID        string     `gorm:"column:outlet_id" db:"outlet_id" json:"outlet_id"`
+	OutletCode      string     `gorm:"column:outlet_code" db:"outlet_code" json:"outlet_code"`
+	OutletName      string     `gorm:"column:outlet_name" db:"outlet_name" json:"outlet_name"`
+	OutletType      string     `gorm:"column:outlet_type" db:"outlet_type" json:"outlet_type"`
+	OutletAddress   string     `gorm:"column:outlet_address" db:"outlet_address" json:"outlet_address"`
+	OutletStatus    string     `gorm:"column:outlet_status" db:"outlet_status" json:"outlet_status"`
+	OutletCreatedAt *time.Time `gorm:"column:outlet_created_at" db:"outlet_created_at" json:"outlet_created_at"`
+	DeletedBy       int        `gorm:"column:deleted_by" db:"deleted_by" json:"deleted_by"`
+	DeletedAt       time.Time  `gorm:"column:deleted_at" db:"deleted_at" json:"deleted_at"`
+}
+
 func (Outlet) TableName() string {
 	return "outlet"
 }
@@ -77,6 +91,10 @@ func (OutletCounter) TableName() string {
 
 func (InsertOutletCounter) TableName() string {
 	return "outlet_counter"
+}
+
+func (OutletDeleteHistory) TableName() string {
+	return "outlet_delete_history"
 }
 
 type MetadataPaginationDetail struct {

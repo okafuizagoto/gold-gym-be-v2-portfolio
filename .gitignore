@@ -19,5 +19,8 @@ vendor/
 # air hot-reload (binary sementara)
 tmp/
 
-# compiled binary
+# Binary hasil build lokal -- Dockerfile build binary-nya sendiri
+# (`go build -o main ./cmd/http`) dan air build ke tmp/, jadi ini cuma
+# artefak lokal yang tidak perlu ikut commit (ketemu 89MB ke-commit gara-gara
+# folder ini tidak di-gitignore, bikin clone/checkout Jenkins lebih berat).
 bin/
